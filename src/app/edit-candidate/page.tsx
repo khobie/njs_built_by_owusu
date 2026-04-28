@@ -351,6 +351,9 @@ function EditCandidateInner() {
             </div>
 
             <div className="form-actions" style={{ marginTop: '1.5rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={goBack}>
+                ← Back
+              </button>
               <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void onSave()}>
                 {saving ? 'Saving…' : 'Save changes'}
               </button>

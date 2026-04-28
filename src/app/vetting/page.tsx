@@ -748,6 +748,9 @@ export default function VettingPage() {
               {/* Final Actions */}
               <div style={{ padding: '1.5rem', background: 'var(--gray-50)' }}>
                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  <button className="btn btn-secondary" onClick={closePanel}>
+                    ← Back
+                  </button>
                   {selectedCandidate.verificationStatus !== 'VERIFIED' && (
                     <button
                       className="btn btn-success"
