@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
 
 interface ElectoralArea { id: string; name: string; code: string; }
@@ -33,6 +34,7 @@ interface Candidate {
 interface Stats { totalCandidates: number; importedCount: number; vettedCount: number; approvedCount: number; rejectedCount: number; unopposedCount: number; contestedCount: number; vacantCount: number; byElectoralArea: any[]; }
 
 export default function VettingPage() {
+  const router = useRouter();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [areas, setAreas] = useState<ElectoralArea[]>([]);
   const [stations, setStations] = useState<PollingStation[]>([]);
@@ -365,6 +367,13 @@ export default function VettingPage() {
   };
 
   const progress = getVettingProgress();
+  const goBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push('/');
+  };
 
   return (
     <div>
@@ -377,6 +386,9 @@ export default function VettingPage() {
               <div className="header-subtitle">Review, validate, and manage candidate records</div>
             </div>
             <div className="header-actions">
+              <button type="button" className="btn btn-secondary" onClick={goBack}>
+                ← Back
+              </button>
               <Link href="/" className="btn btn-secondary">← Dashboard</Link>
               <Link href="/edit-candidate" className="btn btn-secondary">Edit candidate</Link>
               <Link href="/import" className="btn btn-secondary">📥 Import</Link>

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { z } from 'zod';
 import { AppShell } from '@/components/dashboard/AppShell';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
@@ -42,6 +42,7 @@ const saveSchema = z.object({
 });
 
 function EditCandidateInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const presetId = searchParams.get('id');
 
@@ -216,6 +217,14 @@ function EditCandidateInner() {
     }
   };
 
+  const goBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push('/');
+  };
+
   return (
     <AppShell activeHref="/edit-candidate">
       <div className="app-main-inner">
@@ -228,6 +237,9 @@ function EditCandidateInner() {
             </p>
           </div>
           <div className="dashboard-meta">
+            <button type="button" className="btn btn-secondary btn-sm" onClick={goBack}>
+              ← Back
+            </button>
             <Link href="/" className="btn btn-secondary btn-sm">
               Dashboard
             </Link>
