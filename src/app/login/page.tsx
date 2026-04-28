@@ -35,36 +35,40 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="container" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-      <section className="section" style={{ width: '100%', maxWidth: 460 }}>
-        <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Account Login</h1>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          Sign in to access role-based dashboards and actions.
-        </p>
+    <main className="glass-login-page">
+      <div className="glass-login-bg-orb glass-login-bg-orb-a" />
+      <div className="glass-login-bg-orb glass-login-bg-orb-b" />
+      <section className="glass-login-card">
+        <div className="glass-login-header">
+          <h1>Account Login</h1>
+          <p>Sign in to access role-based dashboards and actions.</p>
+        </div>
         {error ? <div className="error">{error}</div> : null}
-        <form onSubmit={onSubmit}>
+        <form onSubmit={onSubmit} className="glass-login-form">
           <div className="form-group">
             <label>Username</label>
             <input
-              className="input"
+              className="input glass-input"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter username"
+              autoComplete="username"
               required
             />
           </div>
           <div className="form-group">
             <label>Password</label>
             <input
-              className="input"
+              className="input glass-input"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
               required
             />
           </div>
           <div className="form-actions">
-            <button type="submit" className="btn btn-primary" disabled={loading}>
+            <button type="submit" className="btn btn-primary glass-login-btn" disabled={loading}>
               {loading ? 'Signing in…' : 'Login'}
             </button>
           </div>

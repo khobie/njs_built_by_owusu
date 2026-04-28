@@ -99,6 +99,13 @@ export default function DashboardPage() {
         to: '#059669',
       },
       {
+        label: 'Approved delegates',
+        value: agg.approvedCount.toLocaleString(),
+        hint: 'Candidates approved by vetting panel',
+        from: '#16a34a',
+        to: '#15803d',
+      },
+      {
         label: 'Contests',
         value: agg.contestedSlots.toLocaleString(),
         hint: 'Slots with >1 delegate (code + position)',

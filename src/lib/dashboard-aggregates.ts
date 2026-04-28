@@ -28,6 +28,8 @@ export interface ContestHighlightRow {
 
 export interface DashboardAggregates {
   totalDelegates: number;
+  approvedCount: number;
+  rejectedCount: number;
   issuedOutstanding: number;
   returnedCount: number;
   returnRatePct: number;
@@ -61,6 +63,8 @@ export function aggregateDashboardCandidates(rows: DashboardCandidateInput[]): D
   const totalDelegates = rows.length;
 
   const issuedOutstanding = rows.filter((r) => r.status === 'ISSUED').length;
+  const approvedCount = rows.filter((r) => r.status === 'APPROVED').length;
+  const rejectedCount = rows.filter((r) => r.status === 'REJECTED').length;
   const returnedCount = rows.filter((r) => RETURNED_STATUSES.has(r.status)).length;
   const denomReturn = totalDelegates > 0 ? totalDelegates : 0;
   const returnRatePct = denomReturn > 0 ? (returnedCount / denomReturn) * 100 : 0;
@@ -123,6 +127,8 @@ export function aggregateDashboardCandidates(rows: DashboardCandidateInput[]): D
 
   return {
     totalDelegates,
+    approvedCount,
+    rejectedCount,
     issuedOutstanding,
     returnedCount,
     returnRatePct,
