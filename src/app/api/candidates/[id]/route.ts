@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { assertPollingStationBelongsToArea } from '@/lib/candidate-update-validation';
 import { recalculateContestStatusForGroup } from '@/lib/contest-status';
+import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
 
 export async function GET(
   _request: NextRequest,
@@ -183,15 +184,44 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const user = await getSessionUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!(user.role === 'ADMIN' || user.role === 'VETTING_PANEL')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { id } = params;
+    const candidate = await prisma.candidate.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        pollingStationCode: true,
+        position: true,
+        electoralArea: { select: { code: true } },
+      },
+    });
+
+    if (!candidate) {
+      return NextResponse.json({ error: 'Candidate not found' }, { status: 404 });
+    }
+
+    if (user.role === 'VETTING_PANEL') {
+      const allowed = await getSessionAreaCodes(user.id);
+      const areaCode = candidate.electoralArea?.code;
+      if (!areaCode || !allowed.includes(areaCode)) {
+        return NextResponse.json({ error: 'Forbidden for this electoral area' }, { status: 403 });
+      }
+    }
 
     await prisma.candidate.delete({
       where: { id },
     });
+
+    await recalculateContestStatusForGroup(candidate.pollingStationCode, candidate.position);
 
     return NextResponse.json({ success: true });
   } catch (error) {

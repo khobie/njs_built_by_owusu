@@ -195,6 +195,31 @@ export default function VettingPage() {
     finally { setSavingId(null); }
   };
 
+  const handleDeleteCandidate = async (id: string) => {
+    const confirmed = window.confirm('Delete this candidate record permanently? This action cannot be undone.');
+    if (!confirmed) return;
+
+    setSavingId(id);
+    try {
+      const res = await fetch(`/api/candidates/${id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(typeof data?.error === 'string' ? data.error : 'Failed to delete candidate');
+        return;
+      }
+      await Promise.all([fetchCandidates(), fetchStats()]);
+      notifyDashboardRefresh();
+      if (selectedCandidate?.id === id) {
+        setPanelOpen(false);
+        setSelectedCandidate(null);
+      }
+    } catch {
+      alert('Error deleting candidate');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const saveEdit = async () => {
     if (!selectedCandidate) return;
     setSavingId(selectedCandidate.id);
@@ -770,6 +795,13 @@ export default function VettingPage() {
                       </button>
                     </>
                   )}
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => handleDeleteCandidate(selectedCandidate.id)}
+                    disabled={savingId === selectedCandidate.id}
+                  >
+                    🗑 Delete Candidate
+                  </button>
                   <button className="btn btn-secondary" onClick={closePanel}>Close</button>
                 </div>
               </div>
