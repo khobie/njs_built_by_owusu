@@ -37,6 +37,7 @@ const saveSchema = z.object({
   surname: z.string().min(1, 'Surname is required').max(200),
   firstName: z.string().min(1, 'First name is required').max(200),
   middleName: z.string().max(200).optional(),
+  position: z.string().min(1, 'Position is required').max(200),
   electoralAreaId: z.string().min(1, 'Electoral area is required'),
   pollingStationCode: z.string().min(1, 'Select a polling station (code is stored in the database)'),
 });
@@ -57,6 +58,7 @@ function EditCandidateInner() {
   const [surname, setSurname] = useState('');
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
+  const [position, setPosition] = useState('');
   const [electoralAreaId, setElectoralAreaId] = useState('');
   const [pollingStationCode, setPollingStationCode] = useState('');
 
@@ -101,6 +103,7 @@ function EditCandidateInner() {
       setSurname(c.surname);
       setFirstName(c.firstName);
       setMiddleName(c.middleName ?? '');
+      setPosition(c.position ?? '');
       setElectoralAreaId(c.electoralAreaId);
       setPollingStationCode(c.pollingStationCode ?? '');
       void loadStations(c.electoralAreaId);
@@ -181,6 +184,7 @@ function EditCandidateInner() {
       surname: surname.trim(),
       firstName: firstName.trim(),
       middleName: middleName.trim() || undefined,
+      position: position.trim(),
       electoralAreaId,
       pollingStationCode,
     });
@@ -198,6 +202,7 @@ function EditCandidateInner() {
           surname: parsed.data.surname,
           firstName: parsed.data.firstName,
           middleName: parsed.data.middleName ? parsed.data.middleName : null,
+          position: parsed.data.position,
           electoralAreaId: parsed.data.electoralAreaId,
           pollingStationCode: parsed.data.pollingStationCode,
         }),
@@ -238,6 +243,7 @@ function EditCandidateInner() {
       setSurname('');
       setFirstName('');
       setMiddleName('');
+      setPosition('');
       setElectoralAreaId('');
       setPollingStationCode('');
       setStations([]);
@@ -348,6 +354,17 @@ function EditCandidateInner() {
             <div className="form-group">
               <label htmlFor="mn">Middle name (optional)</label>
               <input id="mn" className="input" value={middleName} onChange={(e) => setMiddleName(e.target.value)} />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="pos">Position</label>
+              <input
+                id="pos"
+                className="input"
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                placeholder="e.g. MEMBER, CHAIRPERSON"
+              />
             </div>
 
             <div className="form-group">
