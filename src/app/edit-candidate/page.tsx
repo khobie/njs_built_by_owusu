@@ -217,6 +217,39 @@ function EditCandidateInner() {
     }
   };
 
+  const onDelete = async () => {
+    if (!selected) return;
+    const confirmed = window.confirm('Delete this candidate permanently? This action cannot be undone.');
+    if (!confirmed) return;
+
+    setClientError('');
+    setServerError('');
+    setSaveOk(false);
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/candidates/${selected.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setServerError(typeof data?.error === 'string' ? data.error : 'Delete failed');
+        return;
+      }
+
+      setSelected(null);
+      setSurname('');
+      setFirstName('');
+      setMiddleName('');
+      setElectoralAreaId('');
+      setPollingStationCode('');
+      setStations([]);
+      setResults((prev) => prev.filter((c) => c.id !== selected.id));
+      notifyDashboardRefresh();
+    } catch {
+      setServerError('Network error while deleting.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const goBack = () => {
     if (typeof window !== 'undefined' && window.history.length > 1) {
       router.back();
@@ -353,6 +386,9 @@ function EditCandidateInner() {
             <div className="form-actions" style={{ marginTop: '1.5rem' }}>
               <button type="button" className="btn btn-secondary" onClick={goBack}>
                 ← Back
+              </button>
+              <button type="button" className="btn btn-danger" disabled={saving} onClick={() => void onDelete()}>
+                {saving ? 'Deleting…' : 'Delete candidate'}
               </button>
               <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void onSave()}>
                 {saving ? 'Saving…' : 'Save changes'}
