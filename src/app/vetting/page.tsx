@@ -238,6 +238,75 @@ export default function VettingPage() {
   const getAreaName = (id: string) => areas.find(a => a.id === id)?.name || id;
   const getStationName = (code: string | null) => { if (!code) return 'Not set'; return allStations.find(s => s.code === code)?.name || code; };
 
+  const exportVettingData = () => {
+    const rows = candidates
+      .map((c) => ({
+        formNumber: c.formNumber,
+        fullName: formatName(c),
+        phoneNumber: c.phoneNumber,
+        electoralArea: getAreaName(c.electoralAreaId),
+        pollingStationName: getStationName(c.pollingStationCode),
+        pollingStationCode: c.pollingStationCode || '',
+        position: c.position,
+        delegateType: c.delegateType,
+        status: c.status,
+        verificationStatus: c.verificationStatus,
+        contestStatus: c.contestStatus,
+      }))
+      .sort((a, b) => {
+        const areaCompare = a.electoralArea.localeCompare(b.electoralArea);
+        if (areaCompare !== 0) return areaCompare;
+        return a.pollingStationName.localeCompare(b.pollingStationName);
+      });
+
+    const header = [
+      'Form Number',
+      'Full Name',
+      'Phone Number',
+      'Electoral Area',
+      'Polling Station Name',
+      'Polling Station Code',
+      'Position',
+      'Delegate Type',
+      'Status',
+      'Verification Status',
+      'Contest Status',
+    ];
+
+    const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const lines = [
+      header.map(csvEscape).join(','),
+      ...rows.map((row) =>
+        [
+          row.formNumber,
+          row.fullName,
+          row.phoneNumber,
+          row.electoralArea,
+          row.pollingStationName,
+          row.pollingStationCode,
+          row.position,
+          row.delegateType,
+          row.status,
+          row.verificationStatus,
+          row.contestStatus,
+        ]
+          .map((value) => csvEscape(String(value ?? '')))
+          .join(',')
+      ),
+    ];
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    link.href = url;
+    link.download = `vetting-export-${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const formatName = (c: Candidate) => {
     const middle = c.middleName ? ` ${c.middleName}` : '';
     return `${c.surname.toUpperCase()}, ${c.firstName}${middle}`;
@@ -335,7 +404,12 @@ export default function VettingPage() {
         <div className="section">
           <div className="section-header">
             <h2 className="section-title">Candidate Management</h2>
-            <span className="badge badge-pending">{candidates.length} records</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span className="badge badge-pending">{candidates.length} records</span>
+              <button className="btn btn-secondary btn-sm" onClick={exportVettingData} disabled={loading || candidates.length === 0}>
+                Export CSV
+              </button>
+            </div>
           </div>
 
           {/* Filters */}
