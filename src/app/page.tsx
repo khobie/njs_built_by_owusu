@@ -27,6 +27,8 @@ export default function DashboardPage() {
   const [areas, setAreas] = useState<ElectoralArea[]>([]);
   const [filterAreaId, setFilterAreaId] = useState('');
   const [filterDelegateType, setFilterDelegateType] = useState('');
+  const [appliedAreaId, setAppliedAreaId] = useState('');
+  const [appliedDelegateType, setAppliedDelegateType] = useState('');
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -36,8 +38,8 @@ export default function DashboardPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filterAreaId) params.set('electoralAreaId', filterAreaId);
-      if (filterDelegateType === 'NEW' || filterDelegateType === 'OLD') params.set('delegateType', filterDelegateType);
+      if (appliedAreaId) params.set('electoralAreaId', appliedAreaId);
+      if (appliedDelegateType === 'NEW' || appliedDelegateType === 'OLD') params.set('delegateType', appliedDelegateType);
       const res = await fetch(`/api/dashboard?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to load dashboard');
       setData(await res.json());
@@ -47,7 +49,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterAreaId, filterDelegateType]);
+  }, [appliedAreaId, appliedDelegateType]);
 
   useEffect(() => {
     void loadDashboard();
@@ -134,6 +136,18 @@ export default function DashboardPage() {
       })
     : '—';
 
+  const applyFilters = () => {
+    setAppliedAreaId(filterAreaId);
+    setAppliedDelegateType(filterDelegateType);
+  };
+
+  const clearFilters = () => {
+    setFilterAreaId('');
+    setFilterDelegateType('');
+    setAppliedAreaId('');
+    setAppliedDelegateType('');
+  };
+
   return (
     <AppShell activeHref="/">
       <div className="app-main-inner">
@@ -187,6 +201,27 @@ export default function DashboardPage() {
               <option value="NEW">New</option>
               <option value="OLD">Old</option>
             </select>
+          </div>
+          <div className="filter-group" style={{ justifyContent: 'flex-end' }}>
+            <label>&nbsp;</label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={applyFilters}
+                disabled={loading}
+              >
+                Search
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={clearFilters}
+                disabled={loading}
+              >
+                Clear filters
+              </button>
+            </div>
           </div>
         </div>
 
