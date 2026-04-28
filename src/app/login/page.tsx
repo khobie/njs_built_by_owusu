@@ -36,43 +36,52 @@ export default function LoginPage() {
 
   return (
     <main className="glass-login-page">
-      <div className="glass-login-bg-orb glass-login-bg-orb-a" />
-      <div className="glass-login-bg-orb glass-login-bg-orb-b" />
       <section className="glass-login-card">
-        <div className="glass-login-header">
-          <h1>Account Login</h1>
-          <p>Sign in to access role-based dashboards and actions.</p>
+        <div className="glass-login-brand">
+          <div className="glass-elephant-mark" aria-hidden="true">
+            🐘
+          </div>
+          <h1>New Patriotic Party</h1>
+          <p>Delegate Management System</p>
+          <span className="glass-login-tag">NPP Portal</span>
         </div>
-        {error ? <div className="error">{error}</div> : null}
-        <form onSubmit={onSubmit} className="glass-login-form">
-          <div className="form-group">
-            <label>Username</label>
-            <input
-              className="input glass-input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter username"
-              autoComplete="username"
-              required
-            />
+
+        <div className="glass-login-pane">
+          <div className="glass-login-header">
+            <h2>Account Login</h2>
+            <p>Sign in to access role-based dashboards and actions.</p>
           </div>
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              className="input glass-input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </div>
-          <div className="form-actions">
-            <button type="submit" className="btn btn-primary glass-login-btn" disabled={loading}>
-              {loading ? 'Signing in…' : 'Login'}
-            </button>
-          </div>
-        </form>
+          {error ? <div className="error">{error}</div> : null}
+          <form onSubmit={onSubmit} className="glass-login-form">
+            <div className="form-group">
+              <label>Username</label>
+              <input
+                className="input glass-input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter username"
+                autoComplete="username"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Password</label>
+              <input
+                className="input glass-input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </div>
+            <div className="form-actions">
+              <button type="submit" className="btn btn-primary glass-login-btn" disabled={loading}>
+                {loading ? 'Signing in…' : 'Login'}
+              </button>
+            </div>
+          </form>
+        </div>
       </section>
     </main>
   );
