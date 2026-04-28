@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
 
-export async function PATCH(
+async function verifyCandidate(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
+  forceVerified = false
 ) {
   try {
     const user = await getSessionUser(request);
@@ -14,7 +15,7 @@ export async function PATCH(
     }
 
     const { id } = params;
-    const body = await request.json();
+    const body = forceVerified ? { verificationStatus: 'VERIFIED' } : await request.json();
 
     const updateData: Record<string, unknown> = {};
 
@@ -70,4 +71,18 @@ export async function PATCH(
       { status: 500 }
     );
   }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  context: { params: { id: string } }
+) {
+  return verifyCandidate(request, context, false);
+}
+
+export async function POST(
+  request: NextRequest,
+  context: { params: { id: string } }
+) {
+  return verifyCandidate(request, context, true);
 }
