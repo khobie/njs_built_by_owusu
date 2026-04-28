@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ElectoralArea {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  code            String           @unique
+  pollingStations PollingStation[]
+  candidates      Candidate[]
+  userAssignments UserElectoralArea[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("electoral_areas")
+}
+
+model PollingStation {
+  name            String
+  code            String        @id
+  electoralAreaId String
+  electoralArea   ElectoralArea @relation(fields: [electoralAreaId], references: [id])
+  candidates      Candidate[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("polling_stations")
+}
+
+model Candidate {
+  id                 String            @id @default(cuid())
+  formNumber         String            @unique
+  surname            String
+  firstName          String
+  middleName         String?
+  phoneNumber        String            @unique
+  age                Int?
+  electoralAreaId    String
+  electoralArea      ElectoralArea     @relation(fields: [electoralAreaId], references: [id])
+  pollingStationCode String?
+  pollingStation     PollingStation?  @relation(fields: [pollingStationCode], references: [code])
+  position           String
+  delegateType       String            @default("NEW")
+  comment            String?
+  status             String            @default("ISSUED")
+  verificationStatus String            @default("NOT_VERIFIED")
+  contestStatus      String            @default("PENDING")
+  reports            CandidateReport[]
+  vettingQuestions   VettingQuestion[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@map("candidates")
+}
+
+model CandidateReport {
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  authorName  String
+  reportType  String    @default("GENERAL")
+  content     String
+  isResolved  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("candidate_reports")
+}
+
+model VettingQuestion {
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  questionKey String
+  question    String
+  response    Boolean
+  notes       String?
+  verifiedBy  String
+  verifiedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([candidateId, questionKey])
+  @@map("vetting_questions")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  passwordHash  String
+  role          String   @default("ADMIN")
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  electoralAreas UserElectoralArea[]
+
+  @@map("users")
+}
+
+model UserElectoralArea {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  areaCode String
+  area     ElectoralArea @relation(fields: [areaCode], references: [code])
+  assignedAt DateTime @default(now())
+
+  @@unique([userId, areaCode])
+  @@map("user_electoral_areas")
+}
+
+// Role constants: ADMIN, FORM_ISSUER, VETTING_PANEL
