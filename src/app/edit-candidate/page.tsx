@@ -43,6 +43,20 @@ const FALLBACK_POSITIONS = [
   'Youth Organizer',
 ] as const;
 
+function uniquePositions(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const cleaned = value.trim();
+    if (!cleaned) continue;
+    const key = cleaned.toLowerCase().replace(/\s+/g, ' ');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(cleaned);
+  }
+  return out.sort((a, b) => a.localeCompare(b));
+}
+
 const saveSchema = z.object({
   surname: z.string().min(1, 'Surname is required').max(200),
   firstName: z.string().min(1, 'First name is required').max(200),
@@ -101,16 +115,11 @@ function EditCandidateInner() {
         return res.json();
       })
       .then((rows: Array<{ position?: string }>) => {
-        const found = Array.from(
-          new Set(
-            rows
-              .map((r) => (r.position || '').trim())
-              .filter((p) => p.length > 0)
-          )
-        ).sort((a, b) => a.localeCompare(b));
-        setPositions(found.length > 0 ? found : [...FALLBACK_POSITIONS]);
+        const found = uniquePositions(rows.map((r) => r.position || ''));
+        const fallback = uniquePositions([...FALLBACK_POSITIONS]);
+        setPositions(found.length > 0 ? found : fallback);
       })
-      .catch(() => setPositions([...FALLBACK_POSITIONS]));
+      .catch(() => setPositions(uniquePositions([...FALLBACK_POSITIONS])));
   }, []);
 
   const loadStations = useCallback(async (areaId: string) => {
