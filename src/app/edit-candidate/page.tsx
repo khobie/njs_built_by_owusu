@@ -33,7 +33,7 @@ interface Candidate {
   pollingStation?: PollingStation | null;
 }
 
-const FALLBACK_POSITIONS = [
+const POSITION_OPTIONS = [
   'Chairman',
   'Vice Chairman',
   'Secretary',
@@ -42,20 +42,6 @@ const FALLBACK_POSITIONS = [
   'Women Organizer',
   'Youth Organizer',
 ] as const;
-
-function uniquePositions(values: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const value of values) {
-    const cleaned = value.trim();
-    if (!cleaned) continue;
-    const key = cleaned.toLowerCase().replace(/\s+/g, ' ');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(cleaned);
-  }
-  return out.sort((a, b) => a.localeCompare(b));
-}
 
 const saveSchema = z.object({
   surname: z.string().min(1, 'Surname is required').max(200),
@@ -83,7 +69,6 @@ function EditCandidateInner() {
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [position, setPosition] = useState('');
-  const [positions, setPositions] = useState<string[]>([]);
   const [electoralAreaId, setElectoralAreaId] = useState('');
   const [pollingStationCode, setPollingStationCode] = useState('');
 
@@ -106,20 +91,6 @@ function EditCandidateInner() {
         /* ignore */
       }
     })();
-  }, []);
-
-  useEffect(() => {
-    fetch('/api/candidates')
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed');
-        return res.json();
-      })
-      .then((rows: Array<{ position?: string }>) => {
-        const found = uniquePositions(rows.map((r) => r.position || ''));
-        const fallback = uniquePositions([...FALLBACK_POSITIONS]);
-        setPositions(found.length > 0 ? found : fallback);
-      })
-      .catch(() => setPositions(uniquePositions([...FALLBACK_POSITIONS])));
   }, []);
 
   const loadStations = useCallback(async (areaId: string) => {
@@ -404,7 +375,7 @@ function EditCandidateInner() {
                 onChange={(e) => setPosition(e.target.value)}
               >
                 <option value="">Select position</option>
-                {positions.map((p) => (
+                {POSITION_OPTIONS.map((p) => (
                   <option key={p} value={p}>
                     {p}
                   </option>
