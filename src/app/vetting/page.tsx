@@ -60,6 +60,7 @@ export default function VettingPage() {
   const [correctionForm, setCorrectionForm] = useState({ electoralAreaId: '', pollingStationCode: '' });
   const [savingCorrection, setSavingCorrection] = useState(false);
   const [correctionError, setCorrectionError] = useState('');
+  const [rejectReason, setRejectReason] = useState('');
   
   // Edit form
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -154,6 +155,7 @@ export default function VettingPage() {
     setSelectedCandidate(candidate);
     setPanelOpen(true);
     setCorrectionForm({ electoralAreaId: candidate.electoralAreaId, pollingStationCode: candidate.pollingStationCode || '' });
+    setRejectReason('');
     setEditForm({
       formNumber: candidate.formNumber,
       surname: candidate.surname,
@@ -182,7 +184,15 @@ export default function VettingPage() {
     setSavingId(id);
     try {
       const endpoint = action === 'verify' ? `/api/candidates/${id}/verify` : action === 'approve' ? `/api/candidates/${id}/approve` : `/api/candidates/${id}/reject`;
-      const res = await fetch(endpoint, { method: 'POST' });
+      if (action === 'reject' && !rejectReason.trim()) {
+        alert('Please provide a rejection reason before rejecting.');
+        return;
+      }
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: action === 'reject' ? JSON.stringify({ reason: rejectReason.trim() }) : undefined,
+      });
       if (!res.ok) {
         const data = await res.json();
         alert(data.error || `Failed`);
@@ -193,6 +203,7 @@ export default function VettingPage() {
       notifyDashboardRefresh();
       if (selectedCandidate?.id === id) {
         setSelectedCandidate(updated);
+        if (action === 'reject') setRejectReason('');
       }
     } catch (err) { alert('Error'); }
     finally { setSavingId(null); }
@@ -366,7 +377,7 @@ export default function VettingPage() {
     { key: 'MEMBERSHIP_CONFIRMED', question: 'Membership confirmed at station level - Local party officials verified membership' },
   ];
 
-  const toggleVettingResponse = async (questionKey: string, currentResponse: boolean) => {
+  const setVettingResponse = async (questionKey: string, nextResponse: boolean) => {
     if (!selectedCandidate) return;
     setSavingId(questionKey);
     try {
@@ -375,7 +386,7 @@ export default function VettingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           questionKey,
-          response: !currentResponse,
+          response: nextResponse,
           verifiedBy: 'Admin',
         }),
       });
@@ -683,7 +694,7 @@ export default function VettingPage() {
                             <div style={{ display: 'flex', gap: '0.5rem', marginLeft: '1rem' }}>
                               <button
                                 className={`btn ${isYes ? 'btn-success' : 'btn-secondary'} btn-sm`}
-                                onClick={() => toggleVettingResponse(item.key, isYes)}
+                                onClick={() => setVettingResponse(item.key, true)}
                                 disabled={savingId === item.key}
                                 style={{ padding: '0.375rem 0.875rem' }}
                               >
@@ -691,8 +702,8 @@ export default function VettingPage() {
                               </button>
                               <button
                                 className={`btn ${isNo ? 'btn-danger' : 'btn-secondary'} btn-sm`}
-                                onClick={() => toggleVettingResponse(item.key, false)}
-                                disabled={savingId === item.key || isYes}
+                                onClick={() => setVettingResponse(item.key, false)}
+                                disabled={savingId === item.key}
                                 style={{ padding: '0.375rem 0.875rem' }}
                               >
                                 ✕ No
@@ -775,6 +786,20 @@ export default function VettingPage() {
 
               {/* Final Actions */}
               <div style={{ padding: '1.5rem', background: 'var(--gray-50)' }}>
+                {selectedCandidate.verificationStatus === 'VERIFIED' && selectedCandidate.status !== 'APPROVED' && selectedCandidate.status !== 'REJECTED' && (
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.35rem' }}>
+                      Rejection reason (required for reject)
+                    </label>
+                    <textarea
+                      className="input"
+                      rows={3}
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      placeholder="Enter reason for rejecting this candidate..."
+                    />
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                   <button className="btn btn-secondary" onClick={closePanel}>
                     ← Back

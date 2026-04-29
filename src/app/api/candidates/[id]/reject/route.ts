@@ -15,6 +15,14 @@ export async function POST(
     }
 
     const { id } = params;
+    const body = await request.json().catch(() => ({}));
+    const reason = typeof body?.reason === 'string' ? body.reason.trim() : '';
+    if (!reason) {
+      return NextResponse.json(
+        { error: 'Rejection reason is required.' },
+        { status: 400 }
+      );
+    }
 
     // Check if candidate exists and get their polling station/position before updating
     const candidate = await prisma.candidate.findUnique({
@@ -52,6 +60,7 @@ export async function POST(
       data: { 
         status: 'REJECTED',
         verificationStatus: 'NOT_VERIFIED',
+        comment: reason,
       },
       include: {
         electoralArea: true,
