@@ -190,7 +190,12 @@ export default function VettingPage() {
       }
       await Promise.all([fetchCandidates(), fetchStats()]);
       notifyDashboardRefresh();
-      if (selectedCandidate?.id === id) { setSelectedCandidate(null); setPanelOpen(false); }
+      if (selectedCandidate?.id === id) {
+        const refreshed = await fetch(`/api/candidates/${id}`);
+        if (refreshed.ok) {
+          setSelectedCandidate(await refreshed.json());
+        }
+      }
     } catch (err) { alert('Error'); }
     finally { setSavingId(null); }
   };
@@ -559,7 +564,7 @@ export default function VettingPage() {
 
       {/* Candidate Detail Panel */}
       {panelOpen && selectedCandidate && (
-        <div className="modal-overlay" onClick={closePanel}>
+        <div className="modal-overlay">
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Vetting: {selectedCandidate.surname}, {selectedCandidate.firstName}</h2>
