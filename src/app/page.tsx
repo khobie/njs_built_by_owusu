@@ -40,7 +40,7 @@ export default function DashboardPage() {
       const params = new URLSearchParams();
       if (appliedAreaId) params.set('electoralAreaId', appliedAreaId);
       if (appliedDelegateType === 'NEW' || appliedDelegateType === 'OLD') params.set('delegateType', appliedDelegateType);
-      const res = await fetch(`/api/dashboard?${params.toString()}`);
+      const res = await fetch(`/api/dashboard?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to load dashboard');
       setData(await res.json());
     } catch (e) {

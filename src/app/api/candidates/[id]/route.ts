@@ -4,6 +4,13 @@ import { assertPollingStationBelongsToArea } from '@/lib/candidate-update-valida
 import { recalculateContestStatusForGroup } from '@/lib/contest-status';
 import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
 
+function normalizeGhanaPhone(raw: string): string {
+  const digits = raw.replace(/[^\d]/g, '');
+  if (digits.startsWith('233') && digits.length === 12) return `0${digits.slice(3)}`;
+  if (digits.length === 9) return `0${digits}`;
+  return digits;
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
@@ -86,10 +93,16 @@ export async function PATCH(
       else return NextResponse.json({ error: 'Invalid middle name.' }, { status: 400 });
     }
     if (body.phoneNumber !== undefined) {
-      if (typeof body.phoneNumber !== 'string' || body.phoneNumber.trim().length < 10) {
-        return NextResponse.json({ error: 'Phone number must be at least 10 characters.' }, { status: 400 });
+      if (typeof body.phoneNumber !== 'string') {
+        return NextResponse.json({ error: 'Invalid phone number.' }, { status: 400 });
       }
-      const phone = body.phoneNumber.trim();
+      const phone = normalizeGhanaPhone(body.phoneNumber);
+      if (!/^0\d{9}$/.test(phone)) {
+        return NextResponse.json(
+          { error: 'Phone number must be exactly 10 digits (e.g. 0241234567).' },
+          { status: 400 }
+        );
+      }
       if (phone !== existing.phoneNumber) {
         const dupe = await prisma.candidate.findFirst({
           where: { phoneNumber: phone, NOT: { id } },
