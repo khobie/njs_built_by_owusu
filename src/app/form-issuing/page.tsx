@@ -38,9 +38,15 @@ function makeFormNumber() {
 function normalizeGhanaPhone(raw: string): string {
   const digits = raw.replace(/[^\d]/g, '');
   if (digits.startsWith('233') && digits.length === 12) return `0${digits.slice(3)}`;
-  if (digits.length === 9) return `0${digits}`;
-  if (digits.length > 10 && digits.startsWith('0')) return digits.slice(0, 10);
   return digits;
+}
+
+function sanitizePhoneInput(raw: string): string {
+  const digits = raw.replace(/[^\d]/g, '');
+  if (digits.startsWith('233')) {
+    return `0${digits.slice(3, 12)}`;
+  }
+  return digits.slice(0, 10);
 }
 
 export default function FormIssuingPage() {
@@ -260,7 +266,7 @@ export default function FormIssuingPage() {
                 <input
                   className="input"
                   value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(normalizeGhanaPhone(e.target.value))}
+                  onChange={(e) => setPhoneNumber(sanitizePhoneInput(e.target.value))}
                   placeholder="e.g. 0241234567"
                   required
                 />
