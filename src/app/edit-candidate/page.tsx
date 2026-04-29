@@ -34,13 +34,13 @@ interface Candidate {
 }
 
 const POSITION_OPTIONS = [
-  'Chairman',
-  'Vice Chairman',
-  'Secretary',
-  'Organiser',
-  'Treasurer',
-  'Women Organizer',
-  'Youth Organizer',
+  'CHAIRMAN',
+  'SECRETARY',
+  'ORGANIZER',
+  'WOMEN ORGANIZER',
+  'YOUTH ORGANIZER',
+  'COMMUNICATION OFFICER',
+  'ELECTORAL AFFAIRS OFFICER',
 ] as const;
 
 const saveSchema = z.object({

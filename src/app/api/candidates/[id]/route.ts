@@ -4,11 +4,25 @@ import { assertPollingStationBelongsToArea } from '@/lib/candidate-update-valida
 import { recalculateContestStatusForGroup } from '@/lib/contest-status';
 import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
 
+const ALLOWED_POSITIONS = [
+  'CHAIRMAN',
+  'SECRETARY',
+  'ORGANIZER',
+  'WOMEN ORGANIZER',
+  'YOUTH ORGANIZER',
+  'COMMUNICATION OFFICER',
+  'ELECTORAL AFFAIRS OFFICER',
+] as const;
+
 function normalizeGhanaPhone(raw: string): string {
   const digits = raw.replace(/[^\d]/g, '');
   if (digits.startsWith('233') && digits.length === 12) return `0${digits.slice(3)}`;
   if (digits.length === 9) return `0${digits}`;
   return digits;
+}
+
+function normalizePosition(raw: string): string {
+  return raw.trim().replace(/\s+/g, ' ').toUpperCase();
 }
 
 export async function GET(
@@ -142,7 +156,14 @@ export async function PATCH(
       if (typeof body.position !== 'string' || body.position.trim() === '') {
         return NextResponse.json({ error: 'Position cannot be empty.' }, { status: 400 });
       }
-      updateData.position = body.position.trim();
+      const normalized = normalizePosition(body.position);
+      if (!(ALLOWED_POSITIONS as readonly string[]).includes(normalized)) {
+        return NextResponse.json(
+          { error: `Position must be one of: ${ALLOWED_POSITIONS.join(', ')}` },
+          { status: 400 }
+        );
+      }
+      updateData.position = normalized;
     }
     if (body.delegateType !== undefined) {
       if (body.delegateType !== 'NEW' && body.delegateType !== 'OLD') {

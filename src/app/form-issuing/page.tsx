@@ -18,15 +18,14 @@ interface PollingStation {
   electoralAreaId: string;
 }
 
-const FALLBACK_POSITIONS = [
-  'Chairman',
-  'Vice Chairman',
-  'Secretary',
-  'Organiser',
-  'Treasurer',
-  'Women Organizer',
-  'Youth Organizer',
-  'Other',
+const POSITION_OPTIONS = [
+  'CHAIRMAN',
+  'SECRETARY',
+  'ORGANIZER',
+  'WOMEN ORGANIZER',
+  'YOUTH ORGANIZER',
+  'COMMUNICATION OFFICER',
+  'ELECTORAL AFFAIRS OFFICER',
 ] as const;
 
 function makeFormNumber() {
@@ -62,8 +61,6 @@ export default function FormIssuingPage() {
   const [middleName, setMiddleName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [position, setPosition] = useState('');
-  const [customPosition, setCustomPosition] = useState('');
-  const [positions, setPositions] = useState<string[]>([]);
   const [delegateType, setDelegateType] = useState<'NEW' | 'OLD'>('NEW');
   const [electoralAreaId, setElectoralAreaId] = useState('');
   const [pollingStationCode, setPollingStationCode] = useState('');
@@ -114,25 +111,6 @@ export default function FormIssuingPage() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/candidates')
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed');
-        return res.json();
-      })
-      .then((rows: Array<{ position?: string }>) => {
-        const found = Array.from(
-          new Set(
-            rows
-              .map((r) => (r.position || '').trim())
-              .filter((p) => p.length > 0)
-          )
-        ).sort((a, b) => a.localeCompare(b));
-        setPositions(found.length > 0 ? found : [...FALLBACK_POSITIONS]);
-      })
-      .catch(() => setPositions([...FALLBACK_POSITIONS]));
-  }, []);
-
-  useEffect(() => {
     if (!electoralAreaId) {
       setStations([]);
       setPollingStationCode('');
@@ -152,7 +130,7 @@ export default function FormIssuingPage() {
   }, [electoralAreaId]);
 
   const normalizedPhone = normalizeGhanaPhone(phoneNumber);
-  const effectivePosition = position === 'Other' ? customPosition.trim() : position;
+  const effectivePosition = position;
 
   const resetForm = () => {
     setFormNumber(makeFormNumber());
@@ -161,7 +139,6 @@ export default function FormIssuingPage() {
     setMiddleName('');
     setPhoneNumber('');
     setPosition('');
-    setCustomPosition('');
     setDelegateType('NEW');
     setElectoralAreaId('');
     setPollingStationCode('');
@@ -293,12 +270,11 @@ export default function FormIssuingPage() {
                 <label>Position Applied For *</label>
                 <select className="select" value={position} onChange={(e) => setPosition(e.target.value)} required>
                   <option value="">Select position</option>
-                  {positions.map((p) => (
+                  {POSITION_OPTIONS.map((p) => (
                     <option key={p} value={p}>
                       {p}
                     </option>
                   ))}
-                  <option value="Other">Other</option>
                 </select>
               </div>
               <div className="form-group">
@@ -309,18 +285,6 @@ export default function FormIssuingPage() {
                 </select>
               </div>
             </div>
-
-            {position === 'Other' && (
-              <div className="form-group">
-                <label>Custom Position *</label>
-                <input
-                  className="input"
-                  value={customPosition}
-                  onChange={(e) => setCustomPosition(e.target.value)}
-                  required
-                />
-              </div>
-            )}
 
             <div className="grid-2">
               <div className="form-group">

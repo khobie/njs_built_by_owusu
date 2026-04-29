@@ -3,11 +3,25 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
 
+const ALLOWED_POSITIONS = [
+  'CHAIRMAN',
+  'SECRETARY',
+  'ORGANIZER',
+  'WOMEN ORGANIZER',
+  'YOUTH ORGANIZER',
+  'COMMUNICATION OFFICER',
+  'ELECTORAL AFFAIRS OFFICER',
+] as const;
+
 function normalizeGhanaPhone(raw: string): string {
   const digits = raw.replace(/[^\d]/g, '');
   if (digits.startsWith('233') && digits.length === 12) return `0${digits.slice(3)}`;
   if (digits.length === 9) return `0${digits}`;
   return digits;
+}
+
+function normalizePosition(raw: string): string {
+  return raw.trim().replace(/\s+/g, ' ').toUpperCase();
 }
 
 const createCandidateSchema = z.object({
@@ -24,7 +38,12 @@ const createCandidateSchema = z.object({
   age: z.coerce.number().min(18).max(120).optional(),
   electoralAreaId: z.string().min(1, 'Electoral area is required'),
   pollingStationCode: z.string().min(1, 'Polling station is required'),
-  position: z.string().min(1, 'Position is required'),
+  position: z
+    .string()
+    .transform((v) => normalizePosition(v))
+    .refine((v) => (ALLOWED_POSITIONS as readonly string[]).includes(v), {
+      message: `Position must be one of: ${ALLOWED_POSITIONS.join(', ')}`,
+    }),
   delegateType: z.enum(['NEW', 'OLD']),
   comment: z.string().optional(),
 });
