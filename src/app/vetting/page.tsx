@@ -188,13 +188,11 @@ export default function VettingPage() {
         alert(data.error || `Failed`);
         return;
       }
+      const updated = await res.json();
       await Promise.all([fetchCandidates(), fetchStats()]);
       notifyDashboardRefresh();
       if (selectedCandidate?.id === id) {
-        const refreshed = await fetch(`/api/candidates/${id}`);
-        if (refreshed.ok) {
-          setSelectedCandidate(await refreshed.json());
-        }
+        setSelectedCandidate(updated);
       }
     } catch (err) { alert('Error'); }
     finally { setSavingId(null); }
