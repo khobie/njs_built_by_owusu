@@ -33,6 +33,16 @@ interface Candidate {
   pollingStation?: PollingStation | null;
 }
 
+const FALLBACK_POSITIONS = [
+  'Chairman',
+  'Vice Chairman',
+  'Secretary',
+  'Organiser',
+  'Treasurer',
+  'Women Organizer',
+  'Youth Organizer',
+] as const;
+
 const saveSchema = z.object({
   surname: z.string().min(1, 'Surname is required').max(200),
   firstName: z.string().min(1, 'First name is required').max(200),
@@ -59,6 +69,7 @@ function EditCandidateInner() {
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [position, setPosition] = useState('');
+  const [positions, setPositions] = useState<string[]>([]);
   const [electoralAreaId, setElectoralAreaId] = useState('');
   const [pollingStationCode, setPollingStationCode] = useState('');
 
@@ -81,6 +92,25 @@ function EditCandidateInner() {
         /* ignore */
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/candidates')
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed');
+        return res.json();
+      })
+      .then((rows: Array<{ position?: string }>) => {
+        const found = Array.from(
+          new Set(
+            rows
+              .map((r) => (r.position || '').trim())
+              .filter((p) => p.length > 0)
+          )
+        ).sort((a, b) => a.localeCompare(b));
+        setPositions(found.length > 0 ? found : [...FALLBACK_POSITIONS]);
+      })
+      .catch(() => setPositions([...FALLBACK_POSITIONS]));
   }, []);
 
   const loadStations = useCallback(async (areaId: string) => {
@@ -358,13 +388,19 @@ function EditCandidateInner() {
 
             <div className="form-group">
               <label htmlFor="pos">Position</label>
-              <input
+              <select
                 id="pos"
-                className="input"
+                className="select"
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
-                placeholder="e.g. MEMBER, CHAIRPERSON"
-              />
+              >
+                <option value="">Select position</option>
+                {positions.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="form-group">
