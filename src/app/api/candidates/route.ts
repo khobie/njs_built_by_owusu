@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
+import { canIssueForms } from '@/lib/roles';
 
 const ALLOWED_POSITIONS = [
   'CHAIRMAN',
@@ -124,7 +125,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getSessionUser(request);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!(user.role === 'ADMIN' || user.role === 'FORM_ISSUER')) {
+    if (!canIssueForms(user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

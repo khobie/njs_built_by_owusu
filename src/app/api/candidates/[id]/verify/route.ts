@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
+import { canVet } from '@/lib/roles';
 
 async function verifyCandidate(
   request: NextRequest,
@@ -10,7 +11,7 @@ async function verifyCandidate(
   try {
     const user = await getSessionUser(request);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!(user.role === 'ADMIN' || user.role === 'VETTING_PANEL')) {
+    if (!canVet(user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

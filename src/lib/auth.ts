@@ -1,13 +1,14 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import type { Role } from '@/lib/roles';
 
 const AUTH_COOKIE = 'auth_token';
 const AUTH_TTL_SECONDS = 60 * 60 * 8; // 8 hours
 
 type SessionPayload = {
   userId: string;
-  role: 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL';
+  role: Role;
   exp: number;
 };
 

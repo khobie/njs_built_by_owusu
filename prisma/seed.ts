@@ -295,6 +295,23 @@ async function main() {
     },
   });
 
+  // Create super admin recovery account
+  const superAdminPassword = await bcrypt.hash('superadmin123', 10);
+  await prisma.user.upsert({
+    where: { email: 'superadmin' },
+    update: {
+      role: 'SUPER_ADMIN',
+      isActive: true,
+    },
+    create: {
+      name: 'Super Admin',
+      email: 'superadmin',
+      passwordHash: superAdminPassword,
+      role: 'SUPER_ADMIN',
+      isActive: true,
+    },
+  });
+
   const areaCount = await prisma.electoralArea.count();
   const stationCount = await prisma.pollingStation.count();
   const userCount = await prisma.user.count();
@@ -302,7 +319,7 @@ async function main() {
   console.log('âœ… Seed completed successfully!');
   console.log(`   - ${areaCount} electoral areas created`);
   console.log(`   - ${stationCount} polling stations created`);
-  console.log(`   - ${userCount} admin user created (email: admin, password: admin123)`);
+  console.log(`   - ${userCount} users available (admin: admin/admin123, superadmin: superadmin/superadmin123)`);
 }
 
 main()

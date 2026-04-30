@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { assertPollingStationBelongsToArea } from '@/lib/candidate-update-validation';
 import { recalculateContestStatusForGroup } from '@/lib/contest-status';
 import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
+import { canVet } from '@/lib/roles';
 
 const ALLOWED_POSITIONS = [
   'CHAIRMAN',
@@ -224,7 +225,7 @@ export async function DELETE(
   try {
     const user = await getSessionUser(request);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!(user.role === 'ADMIN' || user.role === 'VETTING_PANEL')) {
+    if (!canVet(user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AppShell } from '@/components/dashboard/AppShell';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
 import { useRouter } from 'next/navigation';
+import { canIssueForms } from '@/lib/roles';
 
 interface ElectoralArea {
   id: string;
@@ -92,7 +93,7 @@ export default function FormIssuingPage() {
         }
         const data = await res.json();
         const role = data?.user?.role;
-        if (!(role === 'ADMIN' || role === 'FORM_ISSUER')) {
+        if (!canIssueForms(role)) {
           router.push('/');
         }
       })

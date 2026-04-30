@@ -73,17 +73,27 @@ export default function ReportsPage() {
     dateFrom: '',
     dateTo: '',
   }));
+  const [appliedFilters, setAppliedFilters] = useState<ReportFilters>({
+    search: '',
+    reportType: '',
+    status: '',
+    isResolved: '',
+    areaId: '',
+    position: '',
+    dateFrom: '',
+    dateTo: '',
+  });
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filters.search) params.set('search', filters.search);
-      if (filters.reportType) params.set('reportType', filters.reportType);
-      if (filters.status) params.set('status', filters.status);
-      if (filters.isResolved) params.set('isResolved', filters.isResolved);
-      if (filters.areaId) params.set('areaId', filters.areaId);
-      if (filters.position) params.set('position', filters.position);
+      if (appliedFilters.search) params.set('search', appliedFilters.search);
+      if (appliedFilters.reportType) params.set('reportType', appliedFilters.reportType);
+      if (appliedFilters.status) params.set('status', appliedFilters.status);
+      if (appliedFilters.isResolved) params.set('isResolved', appliedFilters.isResolved);
+      if (appliedFilters.areaId) params.set('areaId', appliedFilters.areaId);
+      if (appliedFilters.position) params.set('position', appliedFilters.position);
       
       const res = await fetch(`/api/candidates?${params.toString()}`);
       if (!res.ok) throw new Error('Failed');
@@ -100,15 +110,17 @@ export default function ReportsPage() {
       });
       
       // Date filtering
-      if (filters.dateFrom || filters.dateTo) {
-        const from = filters.dateFrom ? new Date(filters.dateFrom) : new Date(0);
-        const to = filters.dateTo ? new Date(filters.dateTo) : new Date();
+      if (appliedFilters.dateFrom || appliedFilters.dateTo) {
+        const from = appliedFilters.dateFrom ? new Date(appliedFilters.dateFrom) : new Date(0);
+        const to = appliedFilters.dateTo ? new Date(appliedFilters.dateTo) : new Date();
         to.setHours(23, 59, 59, 999);
         
-        allReports.filter(r => {
+        const filteredByDate = allReports.filter(r => {
           const d = new Date(r.createdAt);
           return d >= from && d <= to;
         });
+        allReports.length = 0;
+        allReports.push(...filteredByDate);
       }
       
       allReports.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -118,7 +130,7 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [appliedFilters]);
 
   useEffect(() => {
     fetchReports();
@@ -226,7 +238,7 @@ export default function ReportsPage() {
   };
 
   const clearFilters = () => {
-    setFilters({
+    const cleared = {
       search: '',
       reportType: '',
       status: '',
@@ -235,10 +247,19 @@ export default function ReportsPage() {
       position: '',
       dateFrom: '',
       dateTo: '',
+    };
+    setFilters(cleared);
+    setAppliedFilters(cleared);
+  };
+
+  const applyFilters = () => {
+    setAppliedFilters({
+      ...filters,
+      search: filters.search.trim(),
     });
   };
 
-  const hasActiveFilters = Object.values(filters).some(v => v !== '');
+  const hasActiveFilters = Object.values(appliedFilters).some(v => v !== '');
 
   // Stats calculation
   const total = reports.length;
@@ -378,7 +399,7 @@ export default function ReportsPage() {
                 type="text"
                 className="input"
                 placeholder="Candidate name, form #, author, content..."
-                value={filters.search}
+                value={appliedFilters.search}
                 onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
               />
             </div>
@@ -387,7 +408,7 @@ export default function ReportsPage() {
               <label>Report Type</label>
               <select
                 className="select"
-                value={filters.reportType}
+                value={appliedFilters.reportType}
                 onChange={(e) => setFilters(prev => ({ ...prev, reportType: e.target.value }))}
               >
                 <option value="">All Types</option>
@@ -399,7 +420,7 @@ export default function ReportsPage() {
               <label>Candidate Status</label>
               <select
                 className="select"
-                value={filters.status}
+                value={appliedFilters.status}
                 onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
               >
                 <option value="">All Statuses</option>
@@ -414,7 +435,7 @@ export default function ReportsPage() {
               <label>Resolution</label>
               <select
                 className="select"
-                value={filters.isResolved}
+                value={appliedFilters.isResolved}
                 onChange={(e) => setFilters(prev => ({ ...prev, isResolved: e.target.value }))}
               >
                 <option value="">All</option>
@@ -427,7 +448,7 @@ export default function ReportsPage() {
               <label>Electoral Area</label>
               <select
                 className="select"
-                value={filters.areaId}
+                value={appliedFilters.areaId}
                 onChange={(e) => setFilters(prev => ({ ...prev, areaId: e.target.value }))}
               >
                 <option value="">All Areas</option>
@@ -439,7 +460,7 @@ export default function ReportsPage() {
               <label>Position</label>
               <select
                 className="select"
-                value={filters.position}
+                value={appliedFilters.position}
                 onChange={(e) => setFilters(prev => ({ ...prev, position: e.target.value }))}
               >
                 <option value="">All Positions</option>
@@ -452,7 +473,7 @@ export default function ReportsPage() {
               <input
                 type="date"
                 className="input"
-                value={filters.dateFrom}
+                value={appliedFilters.dateFrom}
                 onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
               />
             </div>
@@ -462,18 +483,23 @@ export default function ReportsPage() {
               <input
                 type="date"
                 className="input"
-                value={filters.dateTo}
+                value={appliedFilters.dateTo}
                 onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
               />
             </div>
 
-            {hasActiveFilters && (
-              <div className="filter-group" style={{ justifyContent: 'flex-end' }}>
-                <button className="btn btn-secondary" onClick={clearFilters}>
-                  Clear Filters
+            <div className="filter-group" style={{ justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button className="btn btn-primary" onClick={applyFilters}>
+                  Apply Filters
                 </button>
+                {hasActiveFilters && (
+                  <button className="btn btn-secondary" onClick={clearFilters}>
+                    Clear Filters
+                  </button>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* Reports List */}

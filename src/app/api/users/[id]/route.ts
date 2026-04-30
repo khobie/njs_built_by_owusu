@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
+import { isAdminRole } from '@/lib/roles';
+import bcrypt from 'bcryptjs';
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const sessionUser = await getSessionUser(request);
   if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (sessionUser.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!isAdminRole(sessionUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await request.json();
   const { id } = params;
@@ -14,7 +16,16 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     role,
     isActive,
     areaCodes,
-  } = body as { name?: string; role?: 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL'; isActive?: boolean; areaCodes?: string[] };
+    password,
+  } = body as { name?: string; role?: 'SUPER_ADMIN' | 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL'; isActive?: boolean; areaCodes?: string[]; password?: string };
+
+  if (password !== undefined && (typeof password !== 'string' || password.trim().length < 6)) {
+    return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
+  }
+
+  const passwordHash = typeof password === 'string' && password.trim().length > 0
+    ? await bcrypt.hash(password.trim(), 10)
+    : undefined;
 
   const user = await prisma.user.update({
     where: { id },
@@ -22,6 +33,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       ...(name !== undefined ? { name } : {}),
       ...(role !== undefined ? { role } : {}),
       ...(isActive !== undefined ? { isActive } : {}),
+      ...(passwordHash !== undefined ? { passwordHash } : {}),
     },
     select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
   });

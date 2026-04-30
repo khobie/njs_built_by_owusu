@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { getSessionUser } from '@/lib/auth';
+import { isAdminRole } from '@/lib/roles';
 
 export async function POST(request: NextRequest) {
   try {
     const sessionUser = await getSessionUser(request);
     if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (sessionUser.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!isAdminRole(sessionUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const body = await request.json();
     const {

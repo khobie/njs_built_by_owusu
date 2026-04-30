@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { createAuthToken, getAuthCookieMaxAgeSeconds, getAuthCookieName } from '@/lib/auth';
+import type { Role } from '@/lib/roles';
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
         })
       : [];
 
-    const token = createAuthToken(user.id, user.role as 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL');
+    const token = createAuthToken(user.id, user.role as Role);
 
     const response = NextResponse.json({
       message: 'Login successful',

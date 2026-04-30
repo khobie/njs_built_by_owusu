@@ -185,7 +185,7 @@ export default function DashboardPage() {
             <select
               id="dash-area"
               className="select"
-              value={filterAreaId}
+              value={appliedAreaId}
               onChange={(e) => setFilterAreaId(e.target.value)}
             >
               <option value="">All areas</option>
@@ -201,7 +201,7 @@ export default function DashboardPage() {
             <select
               id="dash-delegate"
               className="select"
-              value={filterDelegateType}
+              value={appliedDelegateType}
               onChange={(e) => setFilterDelegateType(e.target.value)}
             >
               <option value="">All types</option>

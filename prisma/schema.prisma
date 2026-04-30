@@ -117,4 +117,4 @@ model UserElectoralArea {
   @@map("user_electoral_areas")
 }
 
-// Role constants: ADMIN, FORM_ISSUER, VETTING_PANEL
+// Role constants: SUPER_ADMIN, ADMIN, FORM_ISSUER, VETTING_PANEL

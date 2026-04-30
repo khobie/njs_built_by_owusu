@@ -1,11 +1,12 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { isAdminRole } from '@/lib/roles';
 
 interface User {
   id: string;
   name: string;
   email: string;
-  role: 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL';
+  role: 'SUPER_ADMIN' | 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL';
   isActive: boolean;
 }
 
@@ -24,7 +25,7 @@ interface RegisterData {
   name: string;
   email: string;
   password: string;
-  role: 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL';
+  role: 'SUPER_ADMIN' | 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL';
   areaCodes?: string[];
 }
 
@@ -106,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasAreaAccess = (areaCode?: string) => {
     if (!areaCode) return true;
     if (!user) return false;
-    if (user.role === 'ADMIN' || user.role === 'FORM_ISSUER') return true;
+    if (isAdminRole(user.role) || user.role === 'FORM_ISSUER') return true;
     return userAreas.includes(areaCode);
   };
 

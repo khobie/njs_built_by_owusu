@@ -42,16 +42,23 @@ export default function VettingPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   
   // Filters
   const [filterArea, setFilterArea] = useState('');
+  const [appliedFilterArea, setAppliedFilterArea] = useState('');
   const [filterStation, setFilterStation] = useState('');
+  const [appliedFilterStation, setAppliedFilterStation] = useState('');
   const [filterPosition, setFilterPosition] = useState('');
+  const [appliedFilterPosition, setAppliedFilterPosition] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [appliedFilterStatus, setAppliedFilterStatus] = useState('');
   const [filterContest, setFilterContest] = useState('');
+  const [appliedFilterContest, setAppliedFilterContest] = useState('');
   const [filterHasErrors, setFilterHasErrors] = useState(false);
+  const [appliedFilterHasErrors, setAppliedFilterHasErrors] = useState(false);
   const [positions, setPositions] = useState<string[]>([]);
   
   // Detail panel
@@ -73,13 +80,13 @@ export default function VettingPage() {
   const fetchCandidates = useCallback(async () => {
     try {
       const params = new URLSearchParams();
-      if (search) params.set('search', search);
-      if (filterArea) params.set('areaId', filterArea);
-      if (filterStation) params.set('stationCode', filterStation);
-      if (filterPosition) params.set('position', filterPosition);
-      if (filterStatus) params.set('status', filterStatus);
-      if (filterContest) params.set('contestStatus', filterContest);
-      if (filterHasErrors) params.set('hasErrors', 'true');
+      if (appliedSearch) params.set('search', appliedSearch);
+      if (appliedFilterArea) params.set('areaId', appliedFilterArea);
+      if (appliedFilterStation) params.set('stationCode', appliedFilterStation);
+      if (appliedFilterPosition) params.set('position', appliedFilterPosition);
+      if (appliedFilterStatus) params.set('status', appliedFilterStatus);
+      if (appliedFilterContest) params.set('contestStatus', appliedFilterContest);
+      if (appliedFilterHasErrors) params.set('hasErrors', 'true');
       
       const res = await fetch(`/api/candidates?${params.toString()}`);
       if (!res.ok) throw new Error('Failed');
@@ -89,7 +96,7 @@ export default function VettingPage() {
       data.forEach((c: Candidate) => c.position && posSet.add(c.position));
       setPositions(Array.from(posSet).sort());
     } catch (err) { console.error('Error:', err); }
-  }, [search, filterArea, filterStation, filterPosition, filterStatus, filterContest, filterHasErrors]);
+  }, [appliedSearch, appliedFilterArea, appliedFilterStation, appliedFilterPosition, appliedFilterStatus, appliedFilterContest, appliedFilterHasErrors]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -145,7 +152,7 @@ export default function VettingPage() {
     init();
   }, [fetchCandidates, fetchAreas, fetchAllStations, fetchStats]);
 
-  useEffect(() => { fetchCandidates(); }, [search, filterArea, filterStation, filterPosition, filterStatus, filterContest, filterHasErrors, fetchCandidates]);
+  useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
 
   useEffect(() => {
     if (filterArea) { fetchStations(filterArea); setFilterStation(''); } else { setStations([]); setFilterStation(''); }
@@ -406,6 +413,34 @@ export default function VettingPage() {
   };
 
   const progress = getVettingProgress();
+  const applyFilters = () => {
+    setAppliedSearch(search.trim());
+    setAppliedFilterArea(filterArea);
+    setAppliedFilterStation(filterStation);
+    setAppliedFilterPosition(filterPosition);
+    setAppliedFilterStatus(filterStatus);
+    setAppliedFilterContest(filterContest);
+    setAppliedFilterHasErrors(filterHasErrors);
+  };
+
+  const clearFilters = () => {
+    setSearch('');
+    setFilterArea('');
+    setFilterStation('');
+    setFilterPosition('');
+    setFilterStatus('');
+    setFilterContest('');
+    setFilterHasErrors(false);
+
+    setAppliedSearch('');
+    setAppliedFilterArea('');
+    setAppliedFilterStation('');
+    setAppliedFilterPosition('');
+    setAppliedFilterStatus('');
+    setAppliedFilterContest('');
+    setAppliedFilterHasErrors(false);
+  };
+
   const goBack = () => {
     if (typeof window !== 'undefined' && window.history.length > 1) {
       router.back();
@@ -506,6 +541,16 @@ export default function VettingPage() {
             <div className="filter-group">
               <button className={`btn ${filterHasErrors ? 'btn-danger' : 'btn-secondary'}`} onClick={() => setFilterHasErrors(!filterHasErrors)}>
                 {filterHasErrors ? '✓ Errors' : 'Show Errors'}
+              </button>
+            </div>
+            <div className="filter-group">
+              <button className="btn btn-primary" onClick={applyFilters}>
+                Apply Filters
+              </button>
+            </div>
+            <div className="filter-group">
+              <button className="btn btn-secondary" onClick={clearFilters}>
+                Clear Filters
               </button>
             </div>
           </div>

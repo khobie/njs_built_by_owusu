@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/dashboard/AppShell';
+import { isAdminRole } from '@/lib/roles';
 
-type Role = 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL';
+type Role = 'SUPER_ADMIN' | 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL';
 
 interface Area {
   id: string;
@@ -44,7 +45,7 @@ export default function AccountsPage() {
         fetch('/api/electoral-areas'),
       ]);
       const s = await sRes.json();
-      if (!sRes.ok || s?.user?.role !== 'ADMIN') {
+      if (!sRes.ok || !isAdminRole(s?.user?.role)) {
         setError('Only Admin can access account management.');
         return;
       }
@@ -99,6 +100,28 @@ export default function AccountsPage() {
     await load();
   };
 
+  const changePassword = async (u: UserRow) => {
+    const nextPassword = window.prompt(`Enter new password for ${u.name}:`);
+    if (!nextPassword) return;
+    if (nextPassword.trim().length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
+    setError('');
+    const res = await fetch(`/api/users/${u.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: nextPassword.trim() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data?.error || 'Failed to change password.');
+      return;
+    }
+    alert(`Password updated for ${u.name}.`);
+  };
+
   return (
     <AppShell activeHref="/accounts">
       <div className="app-main-inner">
@@ -111,7 +134,7 @@ export default function AccountsPage() {
           </div>
         </header>
         {error ? <div className="error">{error}</div> : null}
-        {meRole === 'ADMIN' ? (
+        {isAdminRole(meRole) ? (
           <>
             <section className="section" style={{ marginBottom: '1rem' }}>
               <h2 className="section-title" style={{ marginBottom: '1rem' }}>Create User Account</h2>
@@ -134,6 +157,7 @@ export default function AccountsPage() {
                   <div className="form-group">
                     <label>Role</label>
                     <select className="select" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+                      <option value="SUPER_ADMIN">Super Admin</option>
                       <option value="ADMIN">Admin</option>
                       <option value="FORM_ISSUER">Form Issuer</option>
                       <option value="VETTING_PANEL">Vetting Panel</option>
@@ -188,9 +212,14 @@ export default function AccountsPage() {
                         <td>{u.electoralAreas.map((a) => a.areaCode).join(', ') || '—'}</td>
                         <td>{u.isActive ? 'Active' : 'Inactive'}</td>
                         <td>
-                          <button className="btn btn-secondary btn-sm" onClick={() => void toggleActive(u)}>
-                            {u.isActive ? 'Deactivate' : 'Activate'}
-                          </button>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <button className="btn btn-secondary btn-sm" onClick={() => void toggleActive(u)}>
+                              {u.isActive ? 'Deactivate' : 'Activate'}
+                            </button>
+                            <button className="btn btn-primary btn-sm" onClick={() => void changePassword(u)}>
+                              Change Password
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

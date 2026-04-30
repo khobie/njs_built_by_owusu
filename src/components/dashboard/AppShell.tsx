@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { isAdminRole } from '@/lib/roles';
 
 function IconPencil() {
   return (
@@ -88,7 +89,7 @@ export function AppShell({ activeHref, children }: { activeHref: string; childre
     { href: '/edit-candidate', label: 'Edit candidate', icon: IconPencil },
     { href: '/vetting', label: 'Vetting', icon: IconClipboard },
     { href: '/reports', label: 'Reports', icon: IconDoc },
-    ...(role === 'ADMIN' ? ([{ href: '/accounts', label: 'Accounts', icon: IconUsers }] as const) : []),
+    ...(isAdminRole(role) ? ([{ href: '/accounts', label: 'Accounts', icon: IconUsers }] as const) : []),
   ] as const;
 
   const logout = async () => {
