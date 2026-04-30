@@ -312,6 +312,32 @@ async function main() {
     },
   });
 
+  // Demo vetting-panel user (one electoral area — required for vetting UI)
+  const sampleArea = await prisma.electoralArea.findFirst({ orderBy: { code: 'asc' }, select: { code: true } });
+  if (sampleArea) {
+    const vettingPassword = await bcrypt.hash('vetting123', 10);
+    const vettingUser = await prisma.user.upsert({
+      where: { email: 'vetting' },
+      update: {
+        passwordHash: vettingPassword,
+        role: 'VETTING_PANEL',
+        isActive: true,
+        name: 'Vetting Panel Demo',
+      },
+      create: {
+        name: 'Vetting Panel Demo',
+        email: 'vetting',
+        passwordHash: vettingPassword,
+        role: 'VETTING_PANEL',
+        isActive: true,
+      },
+    });
+    await prisma.userElectoralArea.deleteMany({ where: { userId: vettingUser.id } });
+    await prisma.userElectoralArea.create({
+      data: { userId: vettingUser.id, areaCode: sampleArea.code },
+    });
+  }
+
   const areaCount = await prisma.electoralArea.count();
   const stationCount = await prisma.pollingStation.count();
   const userCount = await prisma.user.count();
@@ -319,7 +345,9 @@ async function main() {
   console.log('âœ… Seed completed successfully!');
   console.log(`   - ${areaCount} electoral areas created`);
   console.log(`   - ${stationCount} polling stations created`);
-  console.log(`   - ${userCount} users available (admin: admin/admin123, superadmin: superadmin/superadmin123)`);
+  console.log(
+    `   - ${userCount} users (admin/admin123 · superadmin/superadmin123 · vetting/vetting123)`,
+  );
 }
 
 main()

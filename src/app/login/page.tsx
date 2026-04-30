@@ -54,12 +54,12 @@ export default function LoginPage() {
           {error ? <div className="error">{error}</div> : null}
           <form onSubmit={onSubmit} className="glass-login-form">
             <div className="form-group">
-              <label>Username</label>
+              <label>Username or email</label>
               <input
                 className="input glass-input"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username"
+                placeholder="e.g. admin or your.email@example.com"
                 autoComplete="username"
                 required
               />
