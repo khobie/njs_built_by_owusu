@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
+import { hasSystemWideAccess } from '@/lib/roles';
 
 interface ImportResult {
   imported: number;
@@ -11,6 +13,7 @@ interface ImportResult {
 }
 
 export default function ImportPage() {
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
@@ -19,6 +22,21 @@ export default function ImportPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void fetch('/api/auth/session')
+      .then(async (res) => {
+        if (!res.ok) {
+          router.replace('/login');
+          return;
+        }
+        const data = await res.json();
+        if (!hasSystemWideAccess(data?.user?.role)) {
+          router.replace('/');
+        }
+      })
+      .catch(() => router.replace('/login'));
+  }, [router]);
 
   const parseTSV = (text: string): { headers: string[]; rows: Record<string, string>[] } => {
     const lines = text.trim().split('\n');

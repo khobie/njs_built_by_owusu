@@ -10,6 +10,11 @@ export function isAdminRole(role: string | null | undefined): role is 'SUPER_ADM
   return role === 'SUPER_ADMIN' || role === 'ADMIN';
 }
 
+/** Full EC dashboard, reports, imports, accounts — coordinators only */
+export function hasSystemWideAccess(role: string | null | undefined): boolean {
+  return role === 'SUPER_ADMIN' || role === 'ADMIN';
+}
+
 export function canIssueForms(role: string | null | undefined): boolean {
   return isAdminRole(role) || role === 'FORM_ISSUER';
 }

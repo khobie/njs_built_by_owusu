@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAdminRole } from '@/lib/roles';
+import { hasSystemWideAccess, isAdminRole } from '@/lib/roles';
 
 function IconPencil() {
   return (
@@ -83,14 +83,32 @@ export function AppShell({ activeHref, children }: { activeHref: string; childre
       .catch(() => router.push('/login'));
   }, [router]);
 
-  const nav = [
-    { href: '/', label: 'Dashboard', icon: IconHome },
-    { href: '/form-issuing', label: 'Form Issuing', icon: IconFilePlus },
-    { href: '/edit-candidate', label: 'Edit candidate', icon: IconPencil },
-    { href: '/vetting', label: 'Vetting', icon: IconClipboard },
-    { href: '/reports', label: 'Reports', icon: IconDoc },
-    ...(isAdminRole(role) ? ([{ href: '/accounts', label: 'Accounts', icon: IconUsers }] as const) : []),
-  ] as const;
+  const dash = { href: '/', label: 'Dashboard', icon: IconHome } as const;
+
+  const nav = (() => {
+    if (!role) return [dash];
+    if (hasSystemWideAccess(role)) {
+      return [
+        dash,
+        { href: '/form-issuing', label: 'Form Issuing', icon: IconFilePlus },
+        { href: '/edit-candidate', label: 'Edit candidate', icon: IconPencil },
+        { href: '/vetting', label: 'Vetting', icon: IconClipboard },
+        { href: '/reports', label: 'Reports', icon: IconDoc },
+        ...(isAdminRole(role) ? ([{ href: '/accounts', label: 'Accounts', icon: IconUsers }] as const) : []),
+      ] as const;
+    }
+    if (role === 'FORM_ISSUER') {
+      return [
+        dash,
+        { href: '/form-issuing', label: 'Form Issuing', icon: IconFilePlus },
+        { href: '/edit-candidate', label: 'Edit candidate', icon: IconPencil },
+      ] as const;
+    }
+    if (role === 'VETTING_PANEL') {
+      return [dash, { href: '/vetting', label: 'Vetting', icon: IconClipboard }] as const;
+    }
+    return [dash] as const;
+  })();
 
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });

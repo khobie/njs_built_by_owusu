@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { AppShell } from '@/components/dashboard/AppShell';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
+import { canVet, hasSystemWideAccess } from '@/lib/roles';
 
 interface ElectoralArea { id: string; name: string; code: string; }
 interface PollingStation { name: string; code: string; electoralAreaId: string; }
@@ -33,8 +35,11 @@ interface Candidate {
 }
 interface Stats { totalCandidates: number; importedCount: number; vettedCount: number; approvedCount: number; rejectedCount: number; unopposedCount: number; contestedCount: number; vacantCount: number; byElectoralArea: any[]; }
 
-export default function VettingPage() {
+function VettingPageInner() {
   const router = useRouter();
+  const routeSearchParams = useSearchParams();
+  const activeTab = routeSearchParams.get('tab') === 'search' ? 'search' : 'browse';
+  const [showSystemNav, setShowSystemNav] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [areas, setAreas] = useState<ElectoralArea[]>([]);
   const [stations, setStations] = useState<PollingStation[]>([]);
@@ -44,7 +49,6 @@ export default function VettingPage() {
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
   
   // Filters
   const [filterArea, setFilterArea] = useState('');
@@ -59,7 +63,12 @@ export default function VettingPage() {
   const [appliedFilterContest, setAppliedFilterContest] = useState('');
   const [filterHasErrors, setFilterHasErrors] = useState(false);
   const [appliedFilterHasErrors, setAppliedFilterHasErrors] = useState(false);
-  const [positions, setPositions] = useState<string[]>([]);
+
+  // Quick search (Search tab)
+  const [quickSearch, setQuickSearch] = useState('');
+  const [debouncedQuickSearch, setDebouncedQuickSearch] = useState('');
+  const [quickResults, setQuickResults] = useState<Candidate[]>([]);
+  const [quickSearching, setQuickSearching] = useState(false);
   
   // Detail panel
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -77,6 +86,55 @@ export default function VettingPage() {
   const [vettingQuestions, setVettingQuestions] = useState<VettingQuestionResponse[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
 
+  useEffect(() => {
+    void fetch('/api/auth/session')
+      .then(async (res) => {
+        if (!res.ok) {
+          router.replace('/login');
+          return;
+        }
+        const data = await res.json();
+        const role = data?.user?.role as string | undefined;
+        if (!canVet(role)) {
+          router.replace('/');
+          return;
+        }
+        setShowSystemNav(hasSystemWideAccess(role ?? ''));
+      })
+      .catch(() => router.replace('/login'));
+  }, [router]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuickSearch(quickSearch.trim()), 350);
+    return () => clearTimeout(t);
+  }, [quickSearch]);
+
+  useEffect(() => {
+    if (activeTab !== 'search') return;
+    if (debouncedQuickSearch.length < 2) {
+      setQuickResults([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setQuickSearching(true);
+      try {
+        const params = new URLSearchParams({ search: debouncedQuickSearch });
+        const res = await fetch(`/api/candidates?${params}`);
+        if (!res.ok) throw new Error('Failed');
+        const data: Candidate[] = await res.json();
+        if (!cancelled) setQuickResults(data);
+      } catch {
+        if (!cancelled) setQuickResults([]);
+      } finally {
+        if (!cancelled) setQuickSearching(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, debouncedQuickSearch]);
+
   const fetchCandidates = useCallback(async () => {
     try {
       const params = new URLSearchParams();
@@ -92,9 +150,6 @@ export default function VettingPage() {
       if (!res.ok) throw new Error('Failed');
       const data = await res.json();
       setCandidates(data);
-      const posSet = new Set<string>();
-      data.forEach((c: Candidate) => c.position && posSet.add(c.position));
-      setPositions(Array.from(posSet).sort());
     } catch (err) { console.error('Error:', err); }
   }, [appliedSearch, appliedFilterArea, appliedFilterStation, appliedFilterPosition, appliedFilterStatus, appliedFilterContest, appliedFilterHasErrors]);
 
@@ -369,10 +424,26 @@ export default function VettingPage() {
     return map[type]?.[value] || 'issued';
   };
 
-  const isRowError = (candidate: Candidate) => !candidate.pollingStationCode || !candidate.electoralAreaId;
-  const hasDuplicatePhone = (candidate: Candidate) => candidates.filter(c => c.phoneNumber === candidate.phoneNumber).length > 1;
-
   const allPositions = Array.from(new Set(candidates.map(c => c.position).filter(Boolean)));
+
+  const rowsForDuplicates = activeTab === 'search' ? quickResults : candidates;
+  const isRowError = (candidate: Candidate) => !candidate.pollingStationCode || !candidate.electoralAreaId;
+  const hasDuplicatePhone = (candidate: Candidate) =>
+    rowsForDuplicates.filter((c) => c.phoneNumber === candidate.phoneNumber).length > 1;
+
+  const openBrowseTab = () => {
+    router.replace('/vetting');
+  };
+
+  const openSearchTab = () => {
+    router.replace('/vetting?tab=search');
+  };
+
+  const editCandidateHref = (id: string) => {
+    const q = new URLSearchParams({ id, from: 'vetting' });
+    if (activeTab === 'search') q.set('vettingTab', 'search');
+    return `/edit-candidate?${q.toString()}`;
+  };
 
   // Vetting questions
   const VETTING_QUESTIONS = [
@@ -450,7 +521,8 @@ export default function VettingPage() {
   };
 
   return (
-    <div>
+    <AppShell activeHref="/vetting">
+      <div>
       {/* Header */}
       <header className="header">
         <div className="container">
@@ -464,9 +536,13 @@ export default function VettingPage() {
                 ← Back
               </button>
               <Link href="/" className="btn btn-secondary">← Dashboard</Link>
-              <Link href="/edit-candidate" className="btn btn-secondary">Edit candidate</Link>
-              <Link href="/import" className="btn btn-secondary">📥 Import</Link>
-              <Link href="/reports" className="btn btn-secondary">📋 Reports</Link>
+              {showSystemNav ? (
+                <>
+                  <Link href="/edit-candidate" className="btn btn-secondary">Edit candidate</Link>
+                  <Link href="/import" className="btn btn-secondary">📥 Import</Link>
+                  <Link href="/reports" className="btn btn-secondary">📋 Reports</Link>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
@@ -486,7 +562,41 @@ export default function VettingPage() {
           </div>
         )}
 
-        {/* Main Section */}
+        <div
+          role="tablist"
+          aria-label="Vetting portal sections"
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '0.5rem',
+            marginBottom: '1.25rem',
+            padding: '0.35rem',
+            background: 'var(--gray-50)',
+            borderRadius: 'var(--radius)',
+            border: '1px solid var(--border-light)',
+          }}
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'browse'}
+            className={`btn btn-sm ${activeTab === 'browse' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={openBrowseTab}
+          >
+            Browse & filters
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'search'}
+            className={`btn btn-sm ${activeTab === 'search' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={openSearchTab}
+          >
+            Search
+          </button>
+        </div>
+
+        {activeTab === 'browse' ? (
         <div className="section">
           <div className="section-header">
             <h2 className="section-title">Candidate Management</h2>
@@ -602,7 +712,7 @@ export default function VettingPage() {
                   <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-light)' }}>
                     <button className="btn btn-primary btn-sm" onClick={() => openPanel(c)} style={{ flex: 1 }}>👁 View</button>
                     <Link
-                      href={`/edit-candidate?id=${c.id}`}
+                      href={editCandidateHref(c.id)}
                       className="btn btn-secondary btn-sm"
                       style={{ flex: 1, display: 'inline-flex', justifyContent: 'center', alignItems: 'center', textDecoration: 'none' }}
                     >
@@ -614,6 +724,94 @@ export default function VettingPage() {
             </div>
           )}
         </div>
+        ) : (
+        <div className="section">
+          <div className="section-header">
+            <h2 className="section-title">Search candidates</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span className="badge badge-pending">{debouncedQuickSearch.length >= 2 ? quickResults.length : 0} matches</span>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={openBrowseTab}>
+                Advanced filters
+              </button>
+            </div>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.5 }}>
+            Type at least two characters. Results update as you type (name, phone, or form number).
+          </p>
+          <div className="filter-group" style={{ maxWidth: '100%', marginBottom: '1rem' }}>
+            <label htmlFor="vetting-quick-search">Search</label>
+            <input
+              id="vetting-quick-search"
+              type="search"
+              className="input"
+              placeholder="Surname, first name, form number, or phone…"
+              value={quickSearch}
+              onChange={(e) => setQuickSearch(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+          {quickSearching && <div className="loading" style={{ padding: '1rem' }}>Searching…</div>}
+          {!quickSearching && debouncedQuickSearch.length >= 2 && quickResults.length === 0 && (
+            <div className="empty-state">No candidates match this search.</div>
+          )}
+          {!quickSearching && debouncedQuickSearch.length > 0 && debouncedQuickSearch.length < 2 && (
+            <p style={{ color: 'var(--text-tertiary)' }}>Enter at least two characters to search.</p>
+          )}
+          {!quickSearching && debouncedQuickSearch.length >= 2 && quickResults.length > 0 && (
+            <div className="candidate-grid">
+              {quickResults.map((c) => (
+                <div key={c.id} className={`candidate-card ${isRowError(c) ? 'error' : ''}`}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>{c.formNumber}</div>
+                      <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', lineHeight: '1.2' }}>{formatName(c)}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-end' }}>
+                      <span className={`badge badge-${getBadgeClass('status', c.status)}`} style={{ fontSize: '0.7rem' }}>{c.status}</span>
+                      <span className={`badge badge-${getBadgeClass('contest', c.contestStatus)}`} style={{ fontSize: '0.7rem' }}>
+                        {c.contestStatus === 'UNOPPOSED' ? 'Unopposed' : c.contestStatus === 'CONTESTED' ? 'Contested' : c.contestStatus}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                    <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Phone</strong>{c.phoneNumber}</div>
+                    <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Position</strong>{c.position}</div>
+                    <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Area</strong>{getAreaName(c.electoralAreaId)}</div>
+                    <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Station</strong>{c.pollingStationCode || 'Not set'}</div>
+                    <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Verified</strong>
+                      <span className={`badge ${c.verificationStatus === 'VERIFIED' ? 'badge-verified' : 'badge-not-verified'}`} style={{ fontSize: '0.7rem' }}>
+                        {c.verificationStatus === 'VERIFIED' ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Type</strong>
+                      <span className={`badge ${c.delegateType === 'NEW' ? 'badge-issued' : 'badge-pending'}`} style={{ fontSize: '0.7rem' }}>{c.delegateType}</span>
+                    </div>
+                  </div>
+
+                  {(isRowError(c) || hasDuplicatePhone(c)) && (
+                    <div style={{ fontSize: '0.75rem', marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      {isRowError(c) && <div className="warning-item error">⚠ Missing station/area</div>}
+                      {hasDuplicatePhone(c) && <div className="warning-item duplicate">⚠ Duplicate phone</div>}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-light)' }}>
+                    <button className="btn btn-primary btn-sm" onClick={() => openPanel(c)} style={{ flex: 1 }}>👁 View</button>
+                    <Link
+                      href={editCandidateHref(c.id)}
+                      className="btn btn-secondary btn-sm"
+                      style={{ flex: 1, display: 'inline-flex', justifyContent: 'center', alignItems: 'center', textDecoration: 'none' }}
+                    >
+                      Edit
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        )}
       </main>
 
       {/* Candidate Detail Panel */}
@@ -868,13 +1066,15 @@ export default function VettingPage() {
                       </button>
                     </>
                   )}
-                  <button
-                    className="btn btn-danger"
-                    onClick={() => handleDeleteCandidate(selectedCandidate.id)}
-                    disabled={savingId === selectedCandidate.id}
-                  >
-                    🗑 Delete Candidate
-                  </button>
+                  {showSystemNav ? (
+                    <button
+                      className="btn btn-danger"
+                      onClick={() => handleDeleteCandidate(selectedCandidate.id)}
+                      disabled={savingId === selectedCandidate.id}
+                    >
+                      🗑 Delete Candidate
+                    </button>
+                  ) : null}
                   <button className="btn btn-secondary" onClick={closePanel}>Close</button>
                 </div>
               </div>
@@ -882,6 +1082,23 @@ export default function VettingPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </AppShell>
+  );
+}
+
+export default function VettingPage() {
+  return (
+    <Suspense
+      fallback={
+        <AppShell activeHref="/vetting">
+          <div className="container" style={{ padding: '3rem', textAlign: 'center' }}>
+            <div className="loading">Loading vetting…</div>
+          </div>
+        </AppShell>
+      }
+    >
+      <VettingPageInner />
+    </Suspense>
   );
 }

@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getSessionUser } from '@/lib/auth';
+import { hasSystemWideAccess } from '@/lib/roles';
 import { aggregateDashboardCandidates, type DashboardCandidateInput } from '@/lib/dashboard-aggregates';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    const sessionUser = await getSessionUser(request);
+    if (!sessionUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasSystemWideAccess(sessionUser.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const electoralAreaId = searchParams.get('electoralAreaId') || '';
     const delegateType = searchParams.get('delegateType') || '';

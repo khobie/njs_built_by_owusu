@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/dashboard/AppShell';
 import { ContestDonut, DelegatesByAreaChart, VerificationDonut } from '@/components/dashboard/DashboardCharts';
 import { DASHBOARD_REFRESH_EVENT } from '@/lib/dashboard-refresh';
 import type { DashboardAggregates } from '@/lib/dashboard-aggregates';
+import { hasSystemWideAccess } from '@/lib/roles';
 
 interface ElectoralArea {
   id: string;
@@ -24,6 +26,9 @@ function formatPct(n: number) {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const [sessionRole, setSessionRole] = useState('');
+  const [sessionName, setSessionName] = useState('');
   const [areas, setAreas] = useState<ElectoralArea[]>([]);
   const [filterAreaId, setFilterAreaId] = useState('');
   const [filterDelegateType, setFilterDelegateType] = useState('');
@@ -33,7 +38,33 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const fullDashboard = hasSystemWideAccess(sessionRole);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/auth/session');
+        if (!res.ok) {
+          router.replace('/login');
+          return;
+        }
+        const j = await res.json();
+        const r = j?.user?.role as string | undefined;
+        const n = j?.user?.name as string | undefined;
+        if (r) setSessionRole(r);
+        if (n) setSessionName(n);
+      } catch {
+        router.replace('/login');
+      }
+    })();
+  }, [router]);
+
   const loadDashboard = useCallback(async () => {
+    if (!hasSystemWideAccess(sessionRole)) {
+      setLoading(false);
+      setData(null);
+      return;
+    }
     setError('');
     setLoading(true);
     try {
@@ -49,11 +80,12 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [appliedAreaId, appliedDelegateType]);
+  }, [appliedAreaId, appliedDelegateType, sessionRole]);
 
   useEffect(() => {
+    if (!sessionRole) return;
     void loadDashboard();
-  }, [loadDashboard]);
+  }, [loadDashboard, sessionRole]);
 
   useEffect(() => {
     const handler = () => void loadDashboard();
@@ -62,6 +94,7 @@ export default function DashboardPage() {
   }, [loadDashboard]);
 
   useEffect(() => {
+    if (!fullDashboard) return;
     (async () => {
       try {
         const res = await fetch('/api/electoral-areas');
@@ -70,7 +103,7 @@ export default function DashboardPage() {
         /* ignore */
       }
     })();
-  }, []);
+  }, [fullDashboard]);
 
   const agg = data?.aggregates;
 
@@ -154,6 +187,55 @@ export default function DashboardPage() {
     setAppliedAreaId('');
     setAppliedDelegateType('');
   };
+
+  if (!sessionRole) {
+    return (
+      <AppShell activeHref="/">
+        <div className="app-main-inner">
+          <div className="loading">Loading…</div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!fullDashboard) {
+    return (
+      <AppShell activeHref="/">
+        <div className="app-main-inner">
+          <header className="dashboard-page-header">
+            <div>
+              <h1>Your portal</h1>
+              <p style={{ color: 'var(--text-secondary)', marginTop: '0.35rem', fontSize: '0.9rem' }}>
+                {sessionName ? `Signed in as ${sessionName}` : 'Role-based workspace'}
+              </p>
+            </div>
+          </header>
+          <section className="section" style={{ maxWidth: '36rem' }}>
+            <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '1.25rem' }}>
+              Use the sidebar to open the tasks assigned to your role. System-wide analytics and coordination tools are limited to administrators.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+              {sessionRole === 'VETTING_PANEL' ? (
+                <Link href="/vetting" className="btn btn-primary">
+                  Open vetting
+                </Link>
+              ) : null}
+              {sessionRole === 'FORM_ISSUER' ? (
+                <>
+                  <Link href="/form-issuing" className="btn btn-primary">
+                    Form issuing
+                  </Link>
+                  <Link href="/edit-candidate" className="btn btn-secondary">
+                    Edit candidate
+                  </Link>
+                </>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell activeHref="/">

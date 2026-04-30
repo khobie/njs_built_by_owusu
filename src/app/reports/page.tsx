@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { hasSystemWideAccess } from '@/lib/roles';
 
 interface ElectoralArea { id: string; name: string; code: string; }
 interface PollingStation { name: string; code: string; electoralAreaId: string; }
@@ -52,6 +54,7 @@ const REPORT_TYPES = [
 ] as const;
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [reports, setReports] = useState<CandidateReport[]>([]);
   const [candidates, setCandidates] = useState<any[]>([]);
   const [areas, setAreas] = useState<ElectoralArea[]>([]);
@@ -83,6 +86,21 @@ export default function ReportsPage() {
     dateFrom: '',
     dateTo: '',
   });
+
+  useEffect(() => {
+    void fetch('/api/auth/session')
+      .then(async (res) => {
+        if (!res.ok) {
+          router.replace('/login');
+          return;
+        }
+        const data = await res.json();
+        if (!hasSystemWideAccess(data?.user?.role)) {
+          router.replace('/');
+        }
+      })
+      .catch(() => router.replace('/login'));
+  }, [router]);
 
   const fetchReports = useCallback(async () => {
     setLoading(true);

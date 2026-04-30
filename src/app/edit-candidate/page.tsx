@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { z } from 'zod';
 import { AppShell } from '@/components/dashboard/AppShell';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
+import { canIssueForms } from '@/lib/roles';
 
 interface ElectoralArea {
   id: string;
@@ -56,6 +57,8 @@ function EditCandidateInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const presetId = searchParams.get('id');
+  const returnFromVetting = searchParams.get('from') === 'vetting';
+  const returnVettingTab = searchParams.get('vettingTab') === 'search' ? 'search' : null;
 
   const [areas, setAreas] = useState<ElectoralArea[]>([]);
   const [stations, setStations] = useState<PollingStation[]>([]);
@@ -76,6 +79,21 @@ function EditCandidateInner() {
   const [serverError, setServerError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
+
+  useEffect(() => {
+    void fetch('/api/auth/session')
+      .then(async (res) => {
+        if (!res.ok) {
+          router.replace('/login');
+          return;
+        }
+        const data = await res.json();
+        if (!canIssueForms(data?.user?.role)) {
+          router.replace('/');
+        }
+      })
+      .catch(() => router.replace('/login'));
+  }, [router]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
@@ -225,6 +243,10 @@ function EditCandidateInner() {
       applyCandidateToForm(data);
       setSaveOk(true);
       notifyDashboardRefresh();
+      if (returnFromVetting) {
+        const path = returnVettingTab === 'search' ? '/vetting?tab=search' : '/vetting';
+        router.push(path);
+      }
     } catch {
       setServerError('Network error while saving.');
     } finally {
