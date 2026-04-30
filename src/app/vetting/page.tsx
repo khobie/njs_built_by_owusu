@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/dashboard/AppShell';
@@ -34,37 +34,6 @@ interface Candidate {
   vettingQuestions?: VettingQuestionResponse[];
 }
 interface Stats { totalCandidates: number; importedCount: number; vettedCount: number; approvedCount: number; rejectedCount: number; unopposedCount: number; contestedCount: number; vacantCount: number; byElectoralArea: any[]; }
-
-/** Card grid order (matches canonical `position` values). Youth organizer follows the six main roles. */
-const VETTING_CARD_POSITION_ORDER = [
-  'CHAIRMAN',
-  'SECRETARY',
-  'ORGANIZER',
-  'WOMEN ORGANIZER',
-  'COMMUNICATION OFFICER',
-  'ELECTORAL AFFAIRS OFFICER',
-  'YOUTH ORGANIZER',
-] as const;
-
-function normalizePositionKey(raw: string | null | undefined): string {
-  if (!raw) return '';
-  return raw.trim().replace(/\s+/g, ' ').toUpperCase();
-}
-
-function positionSortIndex(position: string): number {
-  const key = normalizePositionKey(position);
-  const order = VETTING_CARD_POSITION_ORDER as unknown as readonly string[];
-  const i = order.indexOf(key);
-  return i === -1 ? order.length : i;
-}
-
-function compareCandidatesByVettingPosition(a: Candidate, b: Candidate): number {
-  const d = positionSortIndex(a.position) - positionSortIndex(b.position);
-  if (d !== 0) return d;
-  const nameCmp = `${a.surname},${a.firstName}`.localeCompare(`${b.surname},${b.firstName}`, undefined, { sensitivity: 'base' });
-  if (nameCmp !== 0) return nameCmp;
-  return a.formNumber.localeCompare(b.formNumber);
-}
 
 function VettingPageInner() {
   const router = useRouter();
@@ -457,15 +426,6 @@ function VettingPageInner() {
 
   const allPositions = Array.from(new Set(candidates.map(c => c.position).filter(Boolean)));
 
-  const sortedBrowseCandidates = useMemo(
-    () => [...candidates].sort(compareCandidatesByVettingPosition),
-    [candidates],
-  );
-  const sortedQuickResults = useMemo(
-    () => [...quickResults].sort(compareCandidatesByVettingPosition),
-    [quickResults],
-  );
-
   const rowsForDuplicates = activeTab === 'search' ? quickResults : candidates;
   const isRowError = (candidate: Candidate) => !candidate.pollingStationCode || !candidate.electoralAreaId;
   const hasDuplicatePhone = (candidate: Candidate) =>
@@ -712,7 +672,7 @@ function VettingPageInner() {
             <div className="empty-state">No candidates found</div>
           ) : (
             <div className="candidate-grid">
-              {sortedBrowseCandidates.map((c) => (
+              {candidates.map((c) => (
                 <div key={c.id} className={`candidate-card ${isRowError(c) ? 'error' : ''}`}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                     <div>
@@ -799,7 +759,7 @@ function VettingPageInner() {
           )}
           {!quickSearching && debouncedQuickSearch.length >= 2 && quickResults.length > 0 && (
             <div className="candidate-grid">
-              {sortedQuickResults.map((c) => (
+              {quickResults.map((c) => (
                 <div key={c.id} className={`candidate-card ${isRowError(c) ? 'error' : ''}`}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                     <div>
