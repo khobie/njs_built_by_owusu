@@ -23,10 +23,17 @@ interface UserRow {
 
 export default function AccountsPage() {
   const [meRole, setMeRole] = useState<Role | ''>('');
+  const [meEmail, setMeEmail] = useState('');
   const [users, setUsers] = useState<UserRow[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
   const [error, setError] = useState('');
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savingOwnPassword, setSavingOwnPassword] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -50,6 +57,7 @@ export default function AccountsPage() {
         return;
       }
       setMeRole(s.user.role);
+      setMeEmail(s.user.email || '');
       if (uRes.ok) setUsers(await uRes.json());
       if (aRes.ok) setAreas(await aRes.json());
     } catch {
@@ -84,6 +92,41 @@ export default function AccountsPage() {
       await load();
     } finally {
       setSaving(false);
+    }
+  };
+
+  const changeOwnPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMsg(null);
+    if (newPassword.trim().length < 6) {
+      setPasswordMsg({ type: 'err', text: 'New password must be at least 6 characters.' });
+      return;
+    }
+    if (newPassword.trim() !== confirmNewPassword.trim()) {
+      setPasswordMsg({ type: 'err', text: 'New password and confirmation do not match.' });
+      return;
+    }
+    setSavingOwnPassword(true);
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword: newPassword.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPasswordMsg({ type: 'err', text: data?.error || 'Failed to change password.' });
+        return;
+      }
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setPasswordMsg({ type: 'ok', text: 'Your password has been updated.' });
+    } finally {
+      setSavingOwnPassword(false);
     }
   };
 
@@ -136,6 +179,62 @@ export default function AccountsPage() {
         {error ? <div className="error">{error}</div> : null}
         {isAdminRole(meRole) ? (
           <>
+            <section className="section" style={{ marginBottom: '1rem' }}>
+              <h2 className="section-title" style={{ marginBottom: '1rem' }}>Change your password</h2>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                Signed in as {meEmail || '—'}
+              </p>
+              {passwordMsg ? (
+                <div className={passwordMsg.type === 'err' ? 'error' : undefined} style={passwordMsg.type === 'ok' ? { marginBottom: '0.75rem', color: 'var(--accent-success, #15803d)' } : { marginBottom: '0.75rem' }}>
+                  {passwordMsg.text}
+                </div>
+              ) : null}
+              <form onSubmit={changeOwnPassword}>
+                <div className="grid-3">
+                  <div className="form-group">
+                    <label>Current password</label>
+                    <input
+                      className="input"
+                      type="password"
+                      autoComplete="current-password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>New password</label>
+                    <input
+                      className="input"
+                      type="password"
+                      autoComplete="new-password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Confirm new password</label>
+                    <input
+                      className="input"
+                      type="password"
+                      autoComplete="new-password"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                </div>
+                <div className="form-actions">
+                  <button type="submit" className="btn btn-primary" disabled={savingOwnPassword}>
+                    {savingOwnPassword ? 'Updating…' : 'Update my password'}
+                  </button>
+                </div>
+              </form>
+            </section>
+
             <section className="section" style={{ marginBottom: '1rem' }}>
               <h2 className="section-title" style={{ marginBottom: '1rem' }}>Create User Account</h2>
               <form onSubmit={createUser}>
