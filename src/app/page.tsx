@@ -25,6 +25,11 @@ function formatPct(n: number) {
   return `${n.toFixed(1)}%`;
 }
 
+function pctShare(count: number, total: number) {
+  if (total <= 0) return '0.0';
+  return ((count / total) * 100).toFixed(1);
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [sessionRole, setSessionRole] = useState('');
@@ -107,6 +112,27 @@ export default function DashboardPage() {
 
   const agg = data?.aggregates;
 
+  const reconcile = useMemo(() => {
+    if (!agg) return null;
+    const sumAreas = agg.byElectoralArea.reduce((s, r) => s + r.count, 0);
+    const sumStatus = agg.byStatus.reduce((s, r) => s + r.count, 0);
+    const sumDelegateType = agg.byDelegateType.reduce((s, r) => s + r.count, 0);
+    const sumContestStatus = agg.byContestStatus.reduce((s, r) => s + r.count, 0);
+    const verificationSum = agg.verificationVerified + agg.verificationPending + agg.verificationRejected;
+    return {
+      sumAreas,
+      sumStatus,
+      sumDelegateType,
+      sumContestStatus,
+      verificationSum,
+      areaOk: sumAreas === agg.totalDelegates,
+      statusOk: sumStatus === agg.totalDelegates,
+      delegateTypeOk: sumDelegateType === agg.totalDelegates,
+      contestOk: sumContestStatus === agg.totalDelegates,
+      verificationOk: verificationSum === agg.totalDelegates,
+    };
+  }, [agg]);
+
   const statCards = useMemo(() => {
     if (!agg) return null;
     return [
@@ -120,7 +146,7 @@ export default function DashboardPage() {
       {
         label: 'Return rate',
         value: formatPct(agg.returnRatePct),
-        hint: `Returned ${agg.returnedCount} / ${agg.totalDelegates} total (non‑ISSUED treated as returned)`,
+        hint: `${agg.returnedCount} records — statuses IMPORTED, VETTED, APPROVED, REJECTED (ISSUED counted separately)`,
         from: '#0891b2',
         to: '#0e7490',
       },
@@ -139,23 +165,26 @@ export default function DashboardPage() {
         to: '#15803d',
       },
       {
-        label: 'Contests',
+        label: 'Contested slots',
         value: agg.contestedSlots.toLocaleString(),
-        hint: 'Slots with >1 delegate (code + position)',
+        hint: `Unique station code × position pairs with 2+ candidates (${agg.delegatesExcludedFromSlotAnalysis > 0 ? `${agg.delegatesExcludedFromSlotAnalysis} delegates lack code/position and are excluded from this` : 'all delegates have code + position for slot maths'})`,
         from: '#f59e0b',
         to: '#d97706',
       },
       {
-        label: 'Unopposed',
+        label: 'Unopposed slots',
         value: agg.unopposedSlots.toLocaleString(),
-        hint: 'Slots with exactly one delegate',
+        hint: `Unique pairs with exactly one candidate (same slot rules — ${agg.delegatesInSlotAnalysis.toLocaleString()} delegates in slot analysis)`,
         from: '#06b6d4',
         to: '#0891b2',
       },
       {
         label: 'Old delegates',
         value: agg.oldDelegateCount.toLocaleString(),
-        hint: 'Delegate type OLD',
+        hint:
+          agg.newDelegateCount + agg.oldDelegateCount === agg.totalDelegates
+            ? 'Delegate type OLD (pairs with NEW to cover all records)'
+            : `NEW+OLD (${agg.newDelegateCount + agg.oldDelegateCount}); see Delegate type breakdown for remaining labels`,
         from: '#64748b',
         to: '#475569',
       },
@@ -165,6 +194,13 @@ export default function DashboardPage() {
         hint: 'Delegate type NEW',
         from: '#8b5cf6',
         to: '#7c3aed',
+      },
+      {
+        label: 'Issued (outstanding)',
+        value: agg.issuedOutstanding.toLocaleString(),
+        hint: 'Candidates still marked ISSUED (forms not returned in workflow)',
+        from: '#78716c',
+        to: '#57534e',
       },
     ];
   }, [agg]);
@@ -267,7 +303,7 @@ export default function DashboardPage() {
             <select
               id="dash-area"
               className="select"
-              value={appliedAreaId}
+              value={filterAreaId}
               onChange={(e) => setFilterAreaId(e.target.value)}
             >
               <option value="">All areas</option>
@@ -283,7 +319,7 @@ export default function DashboardPage() {
             <select
               id="dash-delegate"
               className="select"
-              value={appliedDelegateType}
+              value={filterDelegateType}
               onChange={(e) => setFilterDelegateType(e.target.value)}
             >
               <option value="">All types</option>
@@ -338,6 +374,137 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
+
+            {/* Full breakdown reconciled to filtered total */}
+            {reconcile && agg ? (
+              <section className="section" style={{ marginBottom: '1.5rem' }}>
+                <div className="section-header">
+                  <h2 className="section-title">Record breakdown</h2>
+                  <span className="badge badge-issued">{agg.totalDelegates.toLocaleString()} in this view</span>
+                </div>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.55 }}>
+                  Every category below sums to your total (<strong>{agg.totalDelegates}</strong>). Use this to reconcile with CSV or vetting list counts when filters show &ldquo;all areas / all types&rdquo;.
+                </p>
+                {!reconcile.statusOk ||
+                !reconcile.areaOk ||
+                !reconcile.delegateTypeOk ||
+                !reconcile.contestOk ||
+                !reconcile.verificationOk ? (
+                  <div className="error" style={{ marginBottom: '1rem' }}>
+                    Internal tally mismatch detected — sums do not equal total delegates. Refresh or contact support.
+                  </div>
+                ) : null}
+
+                <div className="table-container" style={{ marginBottom: '1.25rem' }}>
+                  <table>
+                    <caption style={{ captionSide: 'top', textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 600 }}>
+                      By workflow status{' '}
+                      <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>
+                        Σ = {reconcile.sumStatus}
+                      </span>
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th>Status</th>
+                        <th style={{ textAlign: 'right' }}>Count</th>
+                        <th style={{ textAlign: 'right', width: '6rem' }}>%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {agg.byStatus.map((row) => (
+                        <tr key={row.label}>
+                          <td>{row.label}</td>
+                          <td style={{ textAlign: 'right' }}>{row.count.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right' }}>{pctShare(row.count, agg.totalDelegates)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="table-container" style={{ marginBottom: '1.25rem' }}>
+                  <table>
+                    <caption style={{ captionSide: 'top', textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 600 }}>
+                      By delegate type{' '}
+                      <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>
+                        Σ = {reconcile.sumDelegateType}
+                      </span>
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th style={{ textAlign: 'right' }}>Count</th>
+                        <th style={{ textAlign: 'right', width: '6rem' }}>%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {agg.byDelegateType.map((row) => (
+                        <tr key={row.label}>
+                          <td>{row.label}</td>
+                          <td style={{ textAlign: 'right' }}>{row.count.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right' }}>{pctShare(row.count, agg.totalDelegates)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="table-container" style={{ marginBottom: '1.25rem' }}>
+                  <table>
+                    <caption style={{ captionSide: 'top', textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 600 }}>
+                      By contest status (stored on record){' '}
+                      <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>
+                        Σ = {reconcile.sumContestStatus}
+                      </span>
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th>Contest status</th>
+                        <th style={{ textAlign: 'right' }}>Count</th>
+                        <th style={{ textAlign: 'right', width: '6rem' }}>%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {agg.byContestStatus.map((row) => (
+                        <tr key={row.label}>
+                          <td>{row.label}</td>
+                          <td style={{ textAlign: 'right' }}>{row.count.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right' }}>{pctShare(row.count, agg.totalDelegates)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div
+                  style={{
+                    padding: '0.875rem 1rem',
+                    background: 'var(--gray-50)',
+                    borderRadius: 'var(--radius)',
+                    border: '1px solid var(--border-light)',
+                    fontSize: '0.875rem',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  <strong style={{ color: 'var(--text-primary)' }}>Slot-based contest charts</strong> use only delegates with{' '}
+                  <strong>polling station code</strong> and <strong>position</strong>:{' '}
+                  {agg.delegatesInSlotAnalysis.toLocaleString()} delegates included,&nbsp;
+                  {agg.delegatesExcludedFromSlotAnalysis.toLocaleString()} excluded. Contested /
+                  unopposed numbers are counts of unique <code>code × position</code> pairs, not raw delegate heads.
+                  <div style={{ marginTop: '0.5rem' }}>
+                    Verification donut parts sum to delegates: Verified {agg.verificationVerified}, pending {agg.verificationPending},{' '}
+                    rejected status {agg.verificationRejected} (Σ {reconcile.verificationSum})
+                    {reconcile.verificationOk ? ' ✓' : ' — check failed'}.
+                  </div>
+                  <div style={{ marginTop: '0.5rem' }}>
+                    Electoral-area bar chart row counts sum to{' '}
+                    <strong>{reconcile.sumAreas.toLocaleString()}</strong>
+                    {reconcile.areaOk ? ' (matches total).' : '.'}
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
             <div className="dashboard-charts-grid">
               <div className="dashboard-chart-card">

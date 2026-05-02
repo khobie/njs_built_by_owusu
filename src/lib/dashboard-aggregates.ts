@@ -12,6 +12,7 @@ export interface DashboardCandidateInput {
   delegateType: string;
   status: string;
   verificationStatus: string;
+  contestStatus: string;
   electoralAreaId: string;
   electoralAreaName: string;
   /** Display only — never used for grouping */
@@ -39,7 +40,7 @@ export interface DashboardAggregates {
   contestedSlots: number;
   /** Distinct (code+position) slots with exactly 1 delegate */
   unopposedSlots: number;
-  /** Distinct (code+position) slots with 0 approved delegates */
+  /** Always 0 with current aggregation (slots only exist when ≥1 delegate) */
   vacantSlots: number;
   newDelegateCount: number;
   oldDelegateCount: number;
@@ -48,9 +49,25 @@ export interface DashboardAggregates {
   verificationRejected: number;
   byElectoralArea: { areaName: string; count: number }[];
   contestHighlights: ContestHighlightRow[];
+  /** Counts grouped by Candidate.status — sums to totalDelegates */
+  byStatus: { label: string; count: number }[];
+  /** Counts grouped by Candidate.delegateType — sums to totalDelegates */
+  byDelegateType: { label: string; count: number }[];
+  /** Counts grouped by Candidate.contestStatus — sums to totalDelegates */
+  byContestStatus: { label: string; count: number }[];
+  /** Rows with polling code + position (included in contested/unopposed slot logic) */
+  delegatesInSlotAnalysis: number;
+  /** Rows missing code or position (slot chart/slot totals ignore these rows) */
+  delegatesExcludedFromSlotAnalysis: number;
 }
 
 const RETURNED_STATUSES = new Set(['IMPORTED', 'VETTED', 'APPROVED', 'REJECTED']);
+
+function toSortedCounts(map: Map<string, number>): { label: string; count: number }[] {
+  return Array.from(map.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
 
 export function makeSlotKey(pollingStationCode: string | null | undefined, position: string | undefined): string | null {
   const code = (pollingStationCode ?? '').trim();
@@ -80,6 +97,21 @@ export function aggregateDashboardCandidates(rows: DashboardCandidateInput[]): D
 
   const newDelegateCount = rows.filter((r) => r.delegateType === 'NEW').length;
   const oldDelegateCount = rows.filter((r) => r.delegateType === 'OLD').length;
+
+  const statusMap = new Map<string, number>();
+  const delegateTypeMap = new Map<string, number>();
+  const contestStatusMap = new Map<string, number>();
+  for (const r of rows) {
+    const st = r.status.trim() || 'UNKNOWN';
+    statusMap.set(st, (statusMap.get(st) ?? 0) + 1);
+    const dt = r.delegateType.trim() || 'UNKNOWN';
+    delegateTypeMap.set(dt, (delegateTypeMap.get(dt) ?? 0) + 1);
+    const cs = r.contestStatus.trim() || 'UNKNOWN';
+    contestStatusMap.set(cs, (contestStatusMap.get(cs) ?? 0) + 1);
+  }
+
+  const delegatesInSlotAnalysis = rows.filter((r) => makeSlotKey(r.pollingStationCode, r.position) !== null).length;
+  const delegatesExcludedFromSlotAnalysis = totalDelegates - delegatesInSlotAnalysis;
 
   const slotMap = new Map<string, DashboardCandidateInput[]>();
   for (const r of rows) {
@@ -144,5 +176,10 @@ export function aggregateDashboardCandidates(rows: DashboardCandidateInput[]): D
     verificationRejected,
     byElectoralArea,
     contestHighlights,
+    byStatus: toSortedCounts(statusMap),
+    byDelegateType: toSortedCounts(delegateTypeMap),
+    byContestStatus: toSortedCounts(contestStatusMap),
+    delegatesInSlotAnalysis,
+    delegatesExcludedFromSlotAnalysis,
   };
 }
