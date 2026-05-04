@@ -108,7 +108,7 @@ export default function PollingStationsPage() {
     slotState === 'vacant'
       ? 'badge badge-vacant'
       : slotState === 'filled'
-        ? 'badge badge-verified'
+        ? 'badge badge-unopposed'
         : 'badge badge-contested';
 
   if (!role) {

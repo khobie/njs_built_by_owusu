@@ -28,10 +28,10 @@
   --info-100: #cffafe;
   
   /* Contest Status Colors */
-  --unopposed: #059669;
-  --unopposed-50: #ecfdf5;
-  --contested: #d97706;
-  --contested-50: #fffbeb;
+  --unopposed: #2563eb;
+  --unopposed-50: #eff6ff;
+  --contested: #dc2626;
+  --contested-50: #fef2f2;
   --vacant: #64748b;
   --vacant-50: #f8fafc;
   
@@ -235,8 +235,8 @@ body {
 .stat-card.pending::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
 .stat-card.approved::before { background: linear-gradient(90deg, #10b981, #059669); }
 .stat-card.rejected::before { background: linear-gradient(90deg, #ef4444, #dc2626); }
-.stat-card.unopposed::before { background: linear-gradient(90deg, #06b6d4, #0891b2); }
-.stat-card.contested::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.stat-card.unopposed::before { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+.stat-card.contested::before { background: linear-gradient(90deg, #ef4444, #dc2626); }
 .stat-card.vacant::before { background: linear-gradient(90deg, #64748b, #475569); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -503,16 +503,16 @@ body {
 }
 
 .badge-unopposed {
-  background: linear-gradient(135deg, var(--unopposed-50), #d1fae5);
+  background: linear-gradient(135deg, var(--unopposed-50), #dbeafe);
   color: var(--unopposed);
-  border-color: #a7f3d0;
+  border-color: #93c5fd;
   font-weight: 700;
 }
 
 .badge-contested {
-  background: linear-gradient(135deg, var(--contested-50), #fef3c7);
+  background: linear-gradient(135deg, var(--contested-50), #fee2e2);
   color: var(--contested);
-  border-color: #fde68a;
+  border-color: #fecaca;
   font-weight: 700;
 }
 

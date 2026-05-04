@@ -31,10 +31,10 @@
   --gray-900: #111827;
   
   /* Semantic */
-  --unopposed: #059669;
-  --unopposed-bg: #d1fae5;
-  --contested: #d97706;
-  --contested-bg: #fef3c7;
+  --unopposed: #2563eb;
+  --unopposed-bg: #dbeafe;
+  --contested: #dc2626;
+  --contested-bg: #fee2e2;
   --vacant: #6b7280;
   --vacant-bg: #f3f4f6;
   --pending: #6b7280;
@@ -401,13 +401,13 @@ body {
 .badge-unopposed {
   background: var(--unopposed-bg);
   color: var(--unopposed);
-  border-color: #6ee7b7;
+  border-color: #93c5fd;
 }
 
 .badge-contested {
   background: var(--contested-bg);
   color: var(--contested);
-  border-color: #fcd34d;
+  border-color: #fecaca;
 }
 
 .badge-vacant {

@@ -44,3 +44,17 @@ export function canonicalizeDelegatePosition(raw: string | null | undefined): Ca
 export function isCanonicalDelegatePosition(raw: string | null | undefined): boolean {
   return canonicalizeDelegatePosition(raw) !== null;
 }
+
+/** Roster order for exports (CHAIRMAN first … ELECTORAL AFFAIRS OFFICER last). Unknown labels sort after all canonical roles. */
+export function delegatePositionCsvOrderIndex(raw: string | null | undefined): number {
+  const canon = canonicalizeDelegatePosition(raw ?? '');
+  if (!canon) return CANONICAL_DELEGATE_POSITIONS.length;
+  return CANONICAL_DELEGATE_POSITIONS.indexOf(canon);
+}
+
+export function compareDelegatePositionCsvOrder(a: string, b: string): number {
+  const ia = delegatePositionCsvOrderIndex(a);
+  const ib = delegatePositionCsvOrderIndex(b);
+  if (ia !== ib) return ia - ib;
+  return normalizeDelegatePosition(a).localeCompare(normalizeDelegatePosition(b));
+}

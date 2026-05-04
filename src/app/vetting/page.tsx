@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/dashboard/AppShell';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
 import { canVet, hasSystemWideAccess } from '@/lib/roles';
+import { compareDelegatePositionCsvOrder } from '@/lib/delegate-positions';
 
 interface ElectoralArea { id: string; name: string; code: string; }
 interface PollingStation { name: string; code: string; electoralAreaId: string; }
@@ -406,7 +407,11 @@ function VettingPageInner() {
         .sort((a, b) => {
           const areaCompare = a.electoralArea.localeCompare(b.electoralArea);
           if (areaCompare !== 0) return areaCompare;
-          return a.pollingStationName.localeCompare(b.pollingStationName);
+          const stationCompare = a.pollingStationName.localeCompare(b.pollingStationName);
+          if (stationCompare !== 0) return stationCompare;
+          const posCompare = compareDelegatePositionCsvOrder(a.position, b.position);
+          if (posCompare !== 0) return posCompare;
+          return a.fullName.localeCompare(b.fullName);
         });
 
     const linesForRows = (rows: RowObj[]): string[] => [
