@@ -3,37 +3,42 @@ import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
 import { hasSystemWideAccess } from '@/lib/roles';
 import {
-  aggregateDashboardCandidates,
+  buildStationCanonicalSlotReports,
   type DashboardCandidateInput,
   type PollingStationBrief,
 } from '@/lib/dashboard-aggregates';
+import { CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
     const sessionUser = await getSessionUser(request);
-    if (!sessionUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (!hasSystemWideAccess(sessionUser.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!hasSystemWideAccess(sessionUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { searchParams } = new URL(request.url);
     const electoralAreaId = searchParams.get('electoralAreaId') || '';
     const delegateType = searchParams.get('delegateType') || '';
 
-    const candidateWhere = {
-      AND: [
-        electoralAreaId ? { electoralAreaId } : {},
-        delegateType === 'NEW' || delegateType === 'OLD' ? { delegateType } : {},
-      ],
-    };
-
-    const [candidates, pollingStationsRaw] = await Promise.all([
+    const [pollingStationsRaw, candidates] = await Promise.all([
+      prisma.pollingStation.findMany({
+        where: electoralAreaId ? { electoralAreaId } : undefined,
+        orderBy: [{ electoralAreaId: 'asc' }, { name: 'asc' }],
+        select: {
+          code: true,
+          name: true,
+          electoralAreaId: true,
+          electoralArea: { select: { name: true } },
+        },
+      }),
       prisma.candidate.findMany({
-        where: candidateWhere,
+        where: {
+          AND: [
+            electoralAreaId ? { electoralAreaId } : {},
+            delegateType === 'NEW' || delegateType === 'OLD' ? { delegateType } : {},
+          ],
+        },
         select: {
           id: true,
           pollingStationCode: true,
@@ -47,17 +52,14 @@ export async function GET(request: NextRequest) {
           pollingStation: { select: { name: true, code: true } },
         },
       }),
-      prisma.pollingStation.findMany({
-        where: electoralAreaId ? { electoralAreaId } : undefined,
-        orderBy: [{ electoralAreaId: 'asc' }, { name: 'asc' }],
-        select: {
-          code: true,
-          name: true,
-          electoralAreaId: true,
-          electoralArea: { select: { name: true } },
-        },
-      }),
     ]);
+
+    const pollingStations: PollingStationBrief[] = pollingStationsRaw.map((s) => ({
+      code: s.code,
+      name: s.name,
+      electoralAreaId: s.electoralAreaId,
+      electoralAreaName: s.electoralArea.name,
+    }));
 
     const rows: DashboardCandidateInput[] = candidates.map((c) => ({
       id: c.id,
@@ -72,25 +74,20 @@ export async function GET(request: NextRequest) {
       pollingStationName: c.pollingStation?.name ?? null,
     }));
 
-    const pollingStations: PollingStationBrief[] = pollingStationsRaw.map((s) => ({
-      code: s.code,
-      name: s.name,
-      electoralAreaId: s.electoralAreaId,
-      electoralAreaName: s.electoralArea.name,
-    }));
-
-    const aggregates = aggregateDashboardCandidates(rows, pollingStations);
+    const reports = buildStationCanonicalSlotReports(rows, pollingStations);
 
     return NextResponse.json({
-      updatedAt: new Date().toISOString(),
+      positions: [...CANONICAL_DELEGATE_POSITIONS],
       filters: {
         electoralAreaId: electoralAreaId || null,
         delegateType: delegateType === 'NEW' || delegateType === 'OLD' ? delegateType : null,
       },
-      aggregates,
+      totals: reports.totals,
+      stations: reports.stations,
+      candidateRecordsInView: candidates.length,
     });
   } catch (error) {
-    console.error('Dashboard GET error:', error);
-    return NextResponse.json({ error: 'Failed to load dashboard' }, { status: 500 });
+    console.error('polling-station-slots GET:', error);
+    return NextResponse.json({ error: 'Failed to load slot report' }, { status: 500 });
   }
 }

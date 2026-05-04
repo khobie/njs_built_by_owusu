@@ -3,16 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
 import { canIssueForms } from '@/lib/roles';
-
-const ALLOWED_POSITIONS = [
-  'CHAIRMAN',
-  'SECRETARY',
-  'ORGANIZER',
-  'WOMEN ORGANIZER',
-  'YOUTH ORGANIZER',
-  'COMMUNICATION OFFICER',
-  'ELECTORAL AFFAIRS OFFICER',
-] as const;
+import { CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
 
 function normalizeGhanaPhone(raw: string): string {
   const digits = raw.replace(/[^\d]/g, '');
@@ -42,8 +33,8 @@ const createCandidateSchema = z.object({
   position: z
     .string()
     .transform((v) => normalizePosition(v))
-    .refine((v) => (ALLOWED_POSITIONS as readonly string[]).includes(v), {
-      message: `Position must be one of: ${ALLOWED_POSITIONS.join(', ')}`,
+    .refine((v) => (CANONICAL_DELEGATE_POSITIONS as readonly string[]).includes(v), {
+      message: `Position must be one of: ${CANONICAL_DELEGATE_POSITIONS.join(', ')}`,
     }),
   delegateType: z.enum(['NEW', 'OLD']),
   comment: z.string().optional(),

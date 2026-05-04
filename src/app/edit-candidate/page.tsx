@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { z } from 'zod';
 import { AppShell } from '@/components/dashboard/AppShell';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
+import { CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
 import { canIssueForms } from '@/lib/roles';
 
 interface ElectoralArea {
@@ -33,16 +34,6 @@ interface Candidate {
   electoralArea?: ElectoralArea;
   pollingStation?: PollingStation | null;
 }
-
-const POSITION_OPTIONS = [
-  'CHAIRMAN',
-  'SECRETARY',
-  'ORGANIZER',
-  'WOMEN ORGANIZER',
-  'YOUTH ORGANIZER',
-  'COMMUNICATION OFFICER',
-  'ELECTORAL AFFAIRS OFFICER',
-] as const;
 
 const saveSchema = z.object({
   surname: z.string().min(1, 'Surname is required').max(200),
@@ -397,7 +388,7 @@ function EditCandidateInner() {
                 onChange={(e) => setPosition(e.target.value)}
               >
                 <option value="">Select position</option>
-                {POSITION_OPTIONS.map((p) => (
+                {CANONICAL_DELEGATE_POSITIONS.map((p) => (
                   <option key={p} value={p}>
                     {p}
                   </option>

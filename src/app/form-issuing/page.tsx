@@ -6,6 +6,7 @@ import { AppShell } from '@/components/dashboard/AppShell';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
 import { useRouter } from 'next/navigation';
 import { canIssueForms } from '@/lib/roles';
+import { CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
 
 interface ElectoralArea {
   id: string;
@@ -19,15 +20,6 @@ interface PollingStation {
   electoralAreaId: string;
 }
 
-const POSITION_OPTIONS = [
-  'CHAIRMAN',
-  'SECRETARY',
-  'ORGANIZER',
-  'WOMEN ORGANIZER',
-  'YOUTH ORGANIZER',
-  'COMMUNICATION OFFICER',
-  'ELECTORAL AFFAIRS OFFICER',
-] as const;
 
 function makeFormNumber() {
   const stamp = Date.now().toString().slice(-8);
@@ -271,7 +263,7 @@ export default function FormIssuingPage() {
                 <label>Position Applied For *</label>
                 <select className="select" value={position} onChange={(e) => setPosition(e.target.value)} required>
                   <option value="">Select position</option>
-                  {POSITION_OPTIONS.map((p) => (
+                  {CANONICAL_DELEGATE_POSITIONS.map((p) => (
                     <option key={p} value={p}>
                       {p}
                     </option>

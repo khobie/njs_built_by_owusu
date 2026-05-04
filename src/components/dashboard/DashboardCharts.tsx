@@ -36,26 +36,33 @@ export const ContestDonut = memo(function ContestDonut({ aggregates }: Props) {
   const { style, legend } = useMemo(() => {
     const c = aggregates.contestedSlots;
     const u = aggregates.unopposedSlots;
-    const t = c + u;
+    const v = aggregates.vacantSlots;
+    const t = c + u + v;
     if (t === 0) {
       return {
         style: { background: 'var(--gray-200)' } as CSSProperties,
         legend: [
-          { label: 'Contests', color: 'var(--contested)', value: 0 },
-          { label: 'Unopposed', color: 'var(--unopposed)', value: 0 },
+          { label: 'Contested (7-role grid)', color: 'var(--contested)', value: 0 },
+          { label: 'Filled single', color: 'var(--unopposed)', value: 0 },
+          { label: 'Vacant', color: 'var(--text-tertiary)', value: 0 },
         ],
       };
     }
     const cDeg = (c / t) * 360;
-    const bg = `conic-gradient(var(--contested) 0deg ${cDeg}deg, var(--unopposed) ${cDeg}deg 360deg)`;
+    const uDeg = (u / t) * 360;
+    const a1 = cDeg;
+    const a2 = cDeg + uDeg;
+    const vacantColor = '#94a3b8';
+    const bg = `conic-gradient(var(--contested) 0deg ${a1}deg, var(--unopposed) ${a1}deg ${a2}deg, ${vacantColor} ${a2}deg 360deg)`;
     return {
       style: { background: bg } as CSSProperties,
       legend: [
-        { label: 'Contested slots', color: 'var(--contested)', value: c },
-        { label: 'Unopposed slots', color: 'var(--unopposed)', value: u },
+        { label: 'Contested (1 seat, 2+ delegates)', color: 'var(--contested)', value: c },
+        { label: 'Filled (exactly 1)', color: 'var(--unopposed)', value: u },
+        { label: 'Vacant', color: vacantColor, value: v },
       ],
     };
-  }, [aggregates.contestedSlots, aggregates.unopposedSlots]);
+  }, [aggregates.contestedSlots, aggregates.unopposedSlots, aggregates.vacantSlots]);
 
   return (
     <div className="chart-donut-wrap">
@@ -72,7 +79,8 @@ export const ContestDonut = memo(function ContestDonut({ aggregates }: Props) {
           </div>
         ))}
         <p style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', maxWidth: '14rem', marginTop: '0.25rem' }}>
-          Slots = unique polling station code + position. Contested if more than one delegate shares the same pair.
+          Whole donut = polling stations × 7 canonical positions ({aggregates.canonicalLogicalSlots} slots).
+          Each contested seat still counts once.
         </p>
       </div>
     </div>

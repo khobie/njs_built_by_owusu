@@ -43,6 +43,16 @@ function IconDoc() {
   );
 }
 
+function IconBuilding() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
+      <path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01" strokeLinecap="round" />
+      <path d="M13 13h4M13 17h4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function IconUsers() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -93,6 +103,7 @@ export function AppShell({ activeHref, children }: { activeHref: string; childre
         { href: '/form-issuing', label: 'Form Issuing', icon: IconFilePlus },
         { href: '/edit-candidate', label: 'Edit candidate', icon: IconPencil },
         { href: '/vetting', label: 'Vetting', icon: IconClipboard },
+        { href: '/polling-stations', label: 'Poll stations', icon: IconBuilding },
         { href: '/reports', label: 'Reports', icon: IconDoc },
         ...(isAdminRole(role) ? ([{ href: '/accounts', label: 'Accounts', icon: IconUsers }] as const) : []),
       ] as const;

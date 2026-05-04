@@ -4,16 +4,7 @@ import { assertPollingStationBelongsToArea } from '@/lib/candidate-update-valida
 import { recalculateContestStatusForGroup } from '@/lib/contest-status';
 import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
 import { canVet } from '@/lib/roles';
-
-const ALLOWED_POSITIONS = [
-  'CHAIRMAN',
-  'SECRETARY',
-  'ORGANIZER',
-  'WOMEN ORGANIZER',
-  'YOUTH ORGANIZER',
-  'COMMUNICATION OFFICER',
-  'ELECTORAL AFFAIRS OFFICER',
-] as const;
+import { CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
 
 function normalizeGhanaPhone(raw: string): string {
   const digits = raw.replace(/[^\d]/g, '');
@@ -158,9 +149,9 @@ export async function PATCH(
         return NextResponse.json({ error: 'Position cannot be empty.' }, { status: 400 });
       }
       const normalized = normalizePosition(body.position);
-      if (!(ALLOWED_POSITIONS as readonly string[]).includes(normalized)) {
+      if (!(CANONICAL_DELEGATE_POSITIONS as readonly string[]).includes(normalized)) {
         return NextResponse.json(
-          { error: `Position must be one of: ${ALLOWED_POSITIONS.join(', ')}` },
+          { error: `Position must be one of: ${CANONICAL_DELEGATE_POSITIONS.join(', ')}` },
           { status: 400 }
         );
       }

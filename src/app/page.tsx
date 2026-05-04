@@ -8,6 +8,7 @@ import { ContestDonut, DelegatesByAreaChart, VerificationDonut } from '@/compone
 import { DASHBOARD_REFRESH_EVENT } from '@/lib/dashboard-refresh';
 import type { DashboardAggregates } from '@/lib/dashboard-aggregates';
 import { hasSystemWideAccess } from '@/lib/roles';
+import { CANONICAL_POSITION_COUNT } from '@/lib/delegate-positions';
 
 interface ElectoralArea {
   id: string;
@@ -165,18 +166,25 @@ export default function DashboardPage() {
         to: '#15803d',
       },
       {
-        label: 'Contested slots',
+        label: 'Contested seats',
         value: agg.contestedSlots.toLocaleString(),
-        hint: `Unique station code × position pairs with 2+ candidates (${agg.delegatesExcludedFromSlotAnalysis > 0 ? `${agg.delegatesExcludedFromSlotAnalysis} delegates lack code/position and are excluded from this` : 'all delegates have code + position for slot maths'})`,
+        hint: `${CANONICAL_POSITION_COUNT} canonical roles per station; each disputed seat counted once (${agg.delegatesExcludedFromCanonicalGrid > 0 ? `${agg.delegatesExcludedFromCanonicalGrid} delegate rows not mapped to the grid — wrong/missing station or non-canonical role` : 'every row maps to grid or anomaly count is 0'})`,
         from: '#f59e0b',
         to: '#d97706',
       },
       {
-        label: 'Unopposed slots',
+        label: 'Filled seats',
         value: agg.unopposedSlots.toLocaleString(),
-        hint: `Unique pairs with exactly one candidate (same slot rules — ${agg.delegatesInSlotAnalysis.toLocaleString()} delegates in slot analysis)`,
+        hint: `Exactly one accredited delegate occupying that seat (same ${CANONICAL_POSITION_COUNT}-role grid × ${agg.pollingStationsInScope.toLocaleString()} stations).`,
         from: '#06b6d4',
         to: '#0891b2',
+      },
+      {
+        label: 'Vacant seats',
+        value: agg.vacantSlots.toLocaleString(),
+        hint: `${agg.canonicalLogicalSlots.toLocaleString()} total seats (${CANONICAL_POSITION_COUNT} roles × ${agg.pollingStationsInScope.toLocaleString()} polling stations in this view) with no delegate.`,
+        from: '#cbd5e1',
+        to: '#94a3b8',
       },
       {
         label: 'Old delegates',
@@ -288,6 +296,9 @@ export default function DashboardPage() {
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => void loadDashboard()} disabled={loading}>
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
+            <Link href="/polling-stations" className="btn btn-secondary btn-sm">
+              Polling stations
+            </Link>
             <Link href="/edit-candidate" className="btn btn-secondary btn-sm">
               Edit candidate
             </Link>
@@ -487,14 +498,24 @@ export default function DashboardPage() {
                     lineHeight: 1.6,
                   }}
                 >
-                  <strong style={{ color: 'var(--text-primary)' }}>Slot-based contest charts</strong> use only delegates with{' '}
-                  <strong>polling station code</strong> and <strong>position</strong>:{' '}
-                  {agg.delegatesInSlotAnalysis.toLocaleString()} delegates included,&nbsp;
-                  {agg.delegatesExcludedFromSlotAnalysis.toLocaleString()} excluded. Contested /
-                  unopposed numbers are counts of unique <code>code × position</code> pairs, not raw delegate heads.
+                  <strong style={{ color: 'var(--text-primary)' }}>Seven roles per polling station:</strong>{' '}
+                  CHAIRMAN, SECRETARY, ORGANIZER, WOMEN ORGANIZER, YOUTH ORGANIZER, COMMUNICATION OFFICER, ELECTORAL
+                  AFFAIRS OFFICER. Each contested seat counts once. Grid uses{' '}
+                  {agg.canonicalLogicalSlots.toLocaleString()} seats ({CANONICAL_POSITION_COUNT} ×{' '}
+                  {agg.pollingStationsInScope.toLocaleString()} stations). Delegate rows counted on-grid:{' '}
+                  {agg.delegatesOnCanonicalSlotGrid.toLocaleString()}; excluded (missing code / unknown station /
+                  non-canonical role): {agg.delegatesExcludedFromCanonicalGrid.toLocaleString()}.
+
                   <div style={{ marginTop: '0.5rem' }}>
-                    Verification donut parts sum to delegates: Verified {agg.verificationVerified}, pending {agg.verificationPending},{' '}
-                    rejected status {agg.verificationRejected} (Σ {reconcile.verificationSum})
+                    Open{' '}
+                    <Link href="/polling-stations" style={{ fontWeight: 600 }}>
+                      Polling stations &amp; slots
+                    </Link>{' '}
+                    for vacancy per station.
+                  </div>
+                  <div style={{ marginTop: '0.5rem' }}>
+                    Verification donut parts sum to delegates: Verified {agg.verificationVerified}, pending{' '}
+                    {agg.verificationPending}, rejected status {agg.verificationRejected} (Σ {reconcile.verificationSum})
                     {reconcile.verificationOk ? ' ✓' : ' — check failed'}.
                   </div>
                   <div style={{ marginTop: '0.5rem' }}>
@@ -513,7 +534,7 @@ export default function DashboardPage() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 <div className="dashboard-chart-card">
-                  <h3 className="dashboard-chart-title">Contest vs unopposed (by slot)</h3>
+                  <h3 className="dashboard-chart-title">Filled vs contested vs vacant (7-role grid)</h3>
                   <ContestDonut aggregates={agg} />
                 </div>
                 <div className="dashboard-chart-card">
@@ -525,12 +546,12 @@ export default function DashboardPage() {
 
             <section className="section">
               <div className="section-header">
-                <h2 className="section-title">Polling stations with contests</h2>
+                <h2 className="section-title">Polling stations — contested seats only</h2>
                 <span className="badge badge-contested">{agg.contestHighlights.length} contested slots</span>
               </div>
               {agg.contestHighlights.length === 0 ? (
                 <p className="empty-state" style={{ padding: '2rem' }}>
-                  No contested slots in this view. Contests use polling station code + position only.
+                  No contested seats in this filtered view — no polling station has more than one delegate in the same canonical role.
                 </p>
               ) : (
                 <div className="table-container">
