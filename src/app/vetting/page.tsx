@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/dashboard/AppShell';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
 import { canVet, hasSystemWideAccess } from '@/lib/roles';
-import { compareDelegatePositionCsvOrder } from '@/lib/delegate-positions';
+import { compareDelegatePositionCsvOrder, canonicalizeDelegatePosition } from '@/lib/delegate-positions';
 
 interface ElectoralArea { id: string; name: string; code: string; }
 interface PollingStation { name: string; code: string; electoralAreaId: string; }
@@ -375,6 +375,16 @@ function VettingPageInner() {
 
     const csvEscape = (value: string) => `"${String(value).replace(/"/g, '""')}"`;
 
+    /** Human-readable Position cell: vacant vs non-canonical vs normal. */
+    const positionLabelForCsv = (raw: string | null | undefined): string => {
+      const t = (raw ?? '').trim();
+      if (!t) return 'VACANT — position not assigned';
+      if (canonicalizeDelegatePosition(t) === null) {
+        return `MISSING CANONICAL ROLE — ${t}`;
+      }
+      return t;
+    };
+
     type RowObj = {
       formNumber: string;
       fullName: string;
@@ -424,7 +434,7 @@ function VettingPageInner() {
           row.electoralArea,
           row.pollingStationName,
           row.pollingStationCode,
-          row.position,
+          positionLabelForCsv(row.position),
           row.delegateType,
           row.status,
           row.verificationStatus,
