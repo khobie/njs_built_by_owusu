@@ -338,30 +338,26 @@ function VettingPageInner() {
     } finally { setSavingCorrection(false); }
   };
 
+  const formatName = (c: Candidate) => {
+    const middle = c.middleName ? ` ${c.middleName}` : '';
+    return `${c.surname.toUpperCase()}, ${c.firstName}${middle}`;
+  };
+
   const getAreaName = (id: string) => areas.find(a => a.id === id)?.name || id;
   const getStationName = (code: string | null) => { if (!code) return 'Not set'; return allStations.find(s => s.code === code)?.name || code; };
 
-  const exportVettingData = () => {
-    const rows = candidates
-      .map((c) => ({
-        formNumber: c.formNumber,
-        fullName: formatName(c),
-        phoneNumber: c.phoneNumber,
-        electoralArea: getAreaName(c.electoralAreaId),
-        pollingStationName: getStationName(c.pollingStationCode),
-        pollingStationCode: c.pollingStationCode || '',
-        position: c.position,
-        delegateType: c.delegateType,
-        status: c.status,
-        verificationStatus: c.verificationStatus,
-        contestStatus: c.contestStatus,
-      }))
-      .sort((a, b) => {
-        const areaCompare = a.electoralArea.localeCompare(b.electoralArea);
-        if (areaCompare !== 0) return areaCompare;
-        return a.pollingStationName.localeCompare(b.pollingStationName);
-      });
+  /** When browse + electoral area applied + "All stations", export one CSV with a section per polling station. */
+  const splitVettingExportByStation =
+    activeTab === 'browse' && Boolean(appliedFilterArea) && !appliedFilterStation;
+  const stationsInAppliedArea = splitVettingExportByStation
+    ? allStations.filter((s) => s.electoralAreaId === appliedFilterArea)
+    : [];
+  const canExportVettingCsv =
+    !loading &&
+    ((splitVettingExportByStation && stationsInAppliedArea.length > 0) ||
+      (!splitVettingExportByStation && candidates.length > 0));
 
+  const exportVettingData = () => {
     const header = [
       'Form Number',
       'Full Name',
@@ -376,8 +372,44 @@ function VettingPageInner() {
       'Contest Status',
     ];
 
-    const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
-    const lines = [
+    const csvEscape = (value: string) => `"${String(value).replace(/"/g, '""')}"`;
+
+    type RowObj = {
+      formNumber: string;
+      fullName: string;
+      phoneNumber: string;
+      electoralArea: string;
+      pollingStationName: string;
+      pollingStationCode: string;
+      position: string;
+      delegateType: string;
+      status: string;
+      verificationStatus: string;
+      contestStatus: string;
+    };
+
+    const rowsFromCandidates = (list: Candidate[]): RowObj[] =>
+      list
+        .map((c) => ({
+          formNumber: c.formNumber,
+          fullName: formatName(c),
+          phoneNumber: c.phoneNumber,
+          electoralArea: getAreaName(c.electoralAreaId),
+          pollingStationName: getStationName(c.pollingStationCode),
+          pollingStationCode: c.pollingStationCode || '',
+          position: c.position,
+          delegateType: c.delegateType,
+          status: c.status,
+          verificationStatus: c.verificationStatus,
+          contestStatus: c.contestStatus,
+        }))
+        .sort((a, b) => {
+          const areaCompare = a.electoralArea.localeCompare(b.electoralArea);
+          if (areaCompare !== 0) return areaCompare;
+          return a.pollingStationName.localeCompare(b.pollingStationName);
+        });
+
+    const linesForRows = (rows: RowObj[]): string[] => [
       header.map(csvEscape).join(','),
       ...rows.map((row) =>
         [
@@ -398,21 +430,64 @@ function VettingPageInner() {
       ),
     ];
 
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    link.href = url;
-    link.download = `vetting-export-${stamp}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
+    /** One full-width label row (column A) + empty cells — groups stations on a single sheet. */
+    const sectionBannerRow = (label: string) =>
+      [csvEscape(label), ...Array(header.length - 1).fill('')].join(',');
 
-  const formatName = (c: Candidate) => {
-    const middle = c.middleName ? ` ${c.middleName}` : '';
-    return `${c.surname.toUpperCase()}, ${c.firstName}${middle}`;
+    const downloadLines = (lines: string[], filename: string) => {
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    };
+
+    const sanitizeFilePart = (s: string) =>
+      s.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 72) || 'export';
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+    if (splitVettingExportByStation && stationsInAppliedArea.length > 0) {
+      const areaSlug = sanitizeFilePart(getAreaName(appliedFilterArea));
+      const stationsOrdered = [...stationsInAppliedArea].sort(
+        (a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code),
+      );
+      const out: string[] = [];
+      out.push(sectionBannerRow(`Electoral area: ${getAreaName(appliedFilterArea)}`));
+      out.push('');
+
+      const codes = new Set(stationsOrdered.map((s) => s.code));
+
+      for (const station of stationsOrdered) {
+        const subset = candidates.filter((c) => (c.pollingStationCode || '') === station.code);
+        const body = linesForRows(rowsFromCandidates(subset));
+        out.push(sectionBannerRow(`Polling station: ${station.name} — code ${station.code}`));
+        out.push(...body);
+        out.push('');
+      }
+
+      const other = candidates.filter(
+        (c) =>
+          c.electoralAreaId === appliedFilterArea &&
+          (!c.pollingStationCode || !codes.has(c.pollingStationCode)),
+      );
+      if (other.length > 0) {
+        const body = linesForRows(rowsFromCandidates(other));
+        out.push(sectionBannerRow('Other / unassigned polling station (in this area)'));
+        out.push(...body);
+        out.push('');
+      }
+
+      downloadLines(out, `vetting-${areaSlug}-by-polling-station-${stamp}.csv`);
+      return;
+    }
+
+    const lines = linesForRows(rowsFromCandidates(candidates));
+    downloadLines(lines, `vetting-export-${stamp}.csv`);
   };
 
   const getBadgeClass = (type: string, value: string) => {
@@ -602,10 +677,17 @@ function VettingPageInner() {
             <h2 className="section-title">Candidate Management</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span className="badge badge-pending">{candidates.length} records</span>
-              <button className="btn btn-secondary btn-sm" onClick={exportVettingData} disabled={loading || candidates.length === 0}>
+              <button className="btn btn-secondary btn-sm" onClick={exportVettingData} disabled={!canExportVettingCsv}>
                 Export CSV
               </button>
             </div>
+            {splitVettingExportByStation && stationsInAppliedArea.length > 0 ? (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.35rem 0 0' }}>
+                With an electoral area selected and station left as &quot;All Stations&quot;, one spreadsheet file is
+                downloaded with a labeled block per polling station (name and code), then column headers and rows for
+                that station.
+              </p>
+            ) : null}
           </div>
 
           {/* Filters */}
