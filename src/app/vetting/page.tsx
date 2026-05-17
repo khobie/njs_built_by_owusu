@@ -666,13 +666,13 @@ function VettingPageInner() {
               <div className="header-subtitle">
                 {vettingFocus === 'polling_station' ? (
                   <>
-                    You are in <strong>polling-station workflow</strong>: narrow the list by station, vet delegates linked to that site,
-                    and still fix area + canonical role when needed. Slots and contest logic remain per electoral area and position.
+                    <strong>Polling-station mode</strong> (optional): filter the list by linked station. Slots and approval remain
+                    by electoral area and canonical role.
                   </>
                 ) : (
                   <>
-                    Review delegates by electoral area and canonical role only. Verification and approval use the area × position
-                    slot. Use the toggle below if you need polling-station filtering and legacy station fields.
+                    Vetting is organised by <strong>electoral area</strong> and <strong>canonical role</strong> (seven slots per
+                    area). Verification and approval use the area × position slot.
                   </>
                 )}
               </div>
@@ -682,6 +682,15 @@ function VettingPageInner() {
                 ← Back
               </button>
               <Link href="/" className="btn btn-secondary">← Dashboard</Link>
+              {vettingFocus === 'electoral' ? (
+                <button type="button" className="btn btn-secondary" onClick={() => setVettingFocusMode('polling_station')}>
+                  Polling station
+                </button>
+              ) : (
+                <button type="button" className="btn btn-primary" onClick={() => setVettingFocusMode('electoral')}>
+                  Electoral area vetting
+                </button>
+              )}
               {showSystemNav ? (
                 <>
                   <Link href="/edit-candidate" className="btn btn-secondary">Edit candidate</Link>
@@ -717,49 +726,6 @@ function VettingPageInner() {
             ) : null}
           </div>
         )}
-
-        <div
-          className="section"
-          style={{
-            marginBottom: '1.25rem',
-            padding: '1rem 1.25rem',
-            background: 'var(--surface-elevated, var(--gray-50))',
-            borderRadius: 'var(--radius)',
-            border: '1px solid var(--border-light)',
-          }}
-        >
-          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.65rem' }}>
-            Vetting scope
-          </div>
-          <div
-            role="group"
-            aria-label="Choose vetting workflow"
-            style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'stretch' }}
-          >
-            <button
-              type="button"
-              onClick={() => setVettingFocusMode('electoral')}
-              className={`btn btn-sm ${vettingFocus === 'electoral' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ flex: '1 1 220px', textAlign: 'left', justifyContent: 'flex-start', whiteSpace: 'normal', lineHeight: 1.35, padding: '0.65rem 0.85rem' }}
-            >
-              <span style={{ display: 'block', fontWeight: 700 }}>Electoral area &amp; role</span>
-              <span style={{ display: 'block', fontSize: '0.78rem', opacity: 0.92, fontWeight: 400, marginTop: '0.2rem' }}>
-                Default: filter by area and canonical delegate position (seven slots per area).
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setVettingFocusMode('polling_station')}
-              className={`btn btn-sm ${vettingFocus === 'polling_station' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ flex: '1 1 220px', textAlign: 'left', justifyContent: 'flex-start', whiteSpace: 'normal', lineHeight: 1.35, padding: '0.65rem 0.85rem' }}
-            >
-              <span style={{ display: 'block', fontWeight: 700 }}>Polling station</span>
-              <span style={{ display: 'block', fontSize: '0.78rem', opacity: 0.92, fontWeight: 400, marginTop: '0.2rem' }}>
-                Optional: filter candidates by linked polling station (legacy / field workflow). URL: <code style={{ fontSize: '0.72rem' }}>?focus=polling</code>
-              </span>
-            </button>
-          </div>
-        </div>
 
         <div
           role="tablist"
@@ -990,10 +956,10 @@ function VettingPageInner() {
             Type at least two characters. Results update as you type (name, phone, or form number). Open a card for full vetting
             checklist and area + role context.
             {vettingFocus === 'polling_station' ? (
-              <span>
+              <>
                 {' '}
-                In <strong>polling-station scope</strong>, use Browse &amp; filters to narrow by station; search is still global.
-              </span>
+                Polling-station filter applies on <strong>Browse &amp; filters</strong> only; search stays global.
+              </>
             ) : null}
           </p>
           <div className="filter-group" style={{ maxWidth: '100%', marginBottom: '1rem' }}>
