@@ -399,13 +399,13 @@ function VettingPageInner() {
   }, [candidates]);
 
   const exportVettingData = () => {
+    const includeStationColumns = vettingFocus === 'polling_station';
     const header = [
       'Form Number',
       'Full Name',
       'Phone Number',
       'Electoral Area',
-      'Polling Station Name',
-      'Polling Station Code',
+      ...(includeStationColumns ? (['Polling Station Name', 'Polling Station Code'] as const) : []),
       'Position',
       'Delegate Type',
       'Status',
@@ -488,8 +488,7 @@ function VettingPageInner() {
           row.fullName,
           row.phoneNumber,
           row.electoralArea,
-          row.pollingStationName,
-          row.pollingStationCode,
+          ...(includeStationColumns ? [row.pollingStationName, row.pollingStationCode] : []),
           positionLabelForCsv(row.position),
           row.delegateType,
           row.status,
@@ -672,8 +671,8 @@ function VettingPageInner() {
                   </>
                 ) : (
                   <>
-                    Review delegates by electoral area and canonical role. Verification and approval use the area + position slot
-                    (polling station is optional reference data). Use the toggle below to switch to polling-station filtering.
+                    Review delegates by electoral area and canonical role only. Verification and approval use the area × position
+                    slot. Use the toggle below if you need polling-station filtering and legacy station fields.
                   </>
                 )}
               </div>
@@ -938,7 +937,7 @@ function VettingPageInner() {
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Phone</strong>{c.phoneNumber}</div>
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Position</strong>{c.position}</div>
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Area</strong>{getAreaName(c.electoralAreaId)}{getAreaCode(c.electoralAreaId) ? ` (${getAreaCode(c.electoralAreaId)})` : ''}</div>
-                    {(c.pollingStationCode || c.pollingStation?.name) ? (
+                    {vettingFocus === 'polling_station' && (c.pollingStationCode || c.pollingStation?.name) ? (
                       <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Poll station (opt.)</strong>{c.pollingStation?.name ? `${c.pollingStation.name} · ` : ''}{c.pollingStationCode || '—'}</div>
                     ) : null}
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Verified</strong>
@@ -1040,7 +1039,7 @@ function VettingPageInner() {
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Phone</strong>{c.phoneNumber}</div>
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Position</strong>{c.position}</div>
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Area</strong>{getAreaName(c.electoralAreaId)}{getAreaCode(c.electoralAreaId) ? ` (${getAreaCode(c.electoralAreaId)})` : ''}</div>
-                    {(c.pollingStationCode || c.pollingStation?.name) ? (
+                    {vettingFocus === 'polling_station' && (c.pollingStationCode || c.pollingStation?.name) ? (
                       <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Poll station (opt.)</strong>{c.pollingStation?.name ? `${c.pollingStation.name} · ` : ''}{c.pollingStationCode || '—'}</div>
                     ) : null}
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Verified</strong>
@@ -1128,18 +1127,20 @@ function VettingPageInner() {
                       ? ` (${getAreaCode(selectedCandidate.electoralAreaId)})`
                       : ''}
                   </div>
-                  <div>
-                    <strong>Poll station (optional):</strong>{' '}
-                    {selectedCandidate.pollingStation?.name
-                      ? `${selectedCandidate.pollingStation.name} · `
-                      : ''}
-                    {selectedCandidate.pollingStationCode || '—'}
-                    {vettingFocus === 'polling_station' && !selectedCandidate.pollingStationCode?.trim() ? (
-                      <span style={{ color: 'var(--warning, #b45309)', fontSize: '0.8rem', display: 'block', marginTop: '0.25rem' }}>
-                        Polling-station scope: this row has no station code yet — link one via Edit if you are vetting by station.
-                      </span>
-                    ) : null}
-                  </div>
+                  {vettingFocus === 'polling_station' ? (
+                    <div>
+                      <strong>Poll station (optional):</strong>{' '}
+                      {selectedCandidate.pollingStation?.name
+                        ? `${selectedCandidate.pollingStation.name} · `
+                        : ''}
+                      {selectedCandidate.pollingStationCode || '—'}
+                      {!selectedCandidate.pollingStationCode?.trim() ? (
+                        <span style={{ color: 'var(--warning, #b45309)', fontSize: '0.8rem', display: 'block', marginTop: '0.25rem' }}>
+                          Polling-station scope: this row has no station code yet — link one via Edit if you are vetting by station.
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div>
                     <strong>Position:</strong> {selectedCandidate.position}
                     {canonicalizeDelegatePosition(selectedCandidate.position) === null ? (
@@ -1294,7 +1295,9 @@ function VettingPageInner() {
                     </select>
                   </div>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.75rem' }}>
-                    Delegates are tracked per electoral area and canonical role. Polling stations are optional legacy metadata.
+                    {vettingFocus === 'polling_station'
+                      ? 'Delegates are tracked per electoral area and canonical role. Polling stations are optional legacy metadata.'
+                      : 'In electoral-area vetting, only the area and canonical role are used for slots and approval.'}
                   </p>
                 </div>
                 <button
