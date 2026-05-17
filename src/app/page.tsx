@@ -296,9 +296,6 @@ export default function DashboardPage() {
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => void loadDashboard()} disabled={loading}>
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
-            <Link href="/polling-stations" className="btn btn-secondary btn-sm">
-              Electoral areas
-            </Link>
             <Link href="/edit-candidate" className="btn btn-secondary btn-sm">
               Edit candidate
             </Link>
@@ -507,11 +504,8 @@ export default function DashboardPage() {
                   non-canonical role): {agg.delegatesExcludedFromCanonicalGrid.toLocaleString()}.
 
                   <div style={{ marginTop: '0.5rem' }}>
-                    Open{' '}
-                    <Link href="/polling-stations" style={{ fontWeight: 600 }}>
-                      Electoral areas &amp; slots
-                    </Link>{' '}
-                    for vacancy per area.
+                    For vacancy by area or the polling-station directory, use the sidebar links <strong>Electoral areas</strong> or{' '}
+                    <strong>Polling stations</strong> — they are not shown on this dashboard by default.
                   </div>
                   <div style={{ marginTop: '0.5rem' }}>
                     Verification donut parts sum to delegates: Verified {agg.verificationVerified}, pending{' '}
@@ -546,7 +540,7 @@ export default function DashboardPage() {
 
             <section className="section">
               <div className="section-header">
-                <h2 className="section-title">Electoral areas — contested seats only</h2>
+                <h2 className="section-title">Contested seats (by electoral area)</h2>
                 <span className="badge badge-contested">{agg.contestHighlights.length} contested slots</span>
               </div>
               {agg.contestHighlights.length === 0 ? (

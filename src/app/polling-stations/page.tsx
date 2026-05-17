@@ -156,6 +156,9 @@ export default function ElectoralAreasSlotsPage() {
             <Link href="/" className="btn btn-secondary btn-sm">
               Dashboard
             </Link>
+            <Link href="/polling-stations/stations" className="btn btn-secondary btn-sm">
+              Polling stations
+            </Link>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => void loadSlots()} disabled={loading}>
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
