@@ -1,15 +1,22 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/dashboard/AppShell';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
 import { canVet, hasSystemWideAccess } from '@/lib/roles';
-import { compareDelegatePositionCsvOrder, canonicalizeDelegatePosition } from '@/lib/delegate-positions';
+import {
+  CANONICAL_DELEGATE_POSITIONS,
+  compareDelegatePositionCsvOrder,
+  canonicalizeDelegatePosition,
+} from '@/lib/delegate-positions';
 
 interface ElectoralArea { id: string; name: string; code: string; }
 interface PollingStation { name: string; code: string; electoralAreaId: string; }
+interface PollingStationOption { code: string; name: string; electoralAreaId: string; }
+
+type VettingFocus = 'electoral' | 'polling_station';
 interface CandidateReport { id: string; candidateId: string; authorName: string; reportType: string; content: string; isResolved?: boolean; createdAt: string; }
 interface VettingQuestionResponse { id: string; candidateId: string; questionKey: string; question: string; response: boolean; notes: string | null; verifiedBy: string; createdAt: string; }
 interface Candidate {
@@ -34,12 +41,27 @@ interface Candidate {
   reports?: CandidateReport[];
   vettingQuestions?: VettingQuestionResponse[];
 }
-interface Stats { totalCandidates: number; importedCount: number; vettedCount: number; approvedCount: number; rejectedCount: number; unopposedCount: number; contestedCount: number; vacantCount: number; byElectoralArea: any[]; }
+interface Stats {
+  totalCandidates: number;
+  importedCount: number;
+  vettedCount: number;
+  approvedCount: number;
+  rejectedCount: number;
+  unopposedCount: number;
+  contestedCount: number;
+  vacantCount: number;
+  errorCount?: number;
+  byElectoralArea: { areaName: string; count: number }[];
+}
 
 function VettingPageInner() {
   const router = useRouter();
   const routeSearchParams = useSearchParams();
   const activeTab = routeSearchParams.get('tab') === 'search' ? 'search' : 'browse';
+  const vettingFocus: VettingFocus =
+    routeSearchParams.get('focus') === 'polling' || routeSearchParams.get('focus') === 'station'
+      ? 'polling_station'
+      : 'electoral';
   const [showSystemNav, setShowSystemNav] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [areas, setAreas] = useState<ElectoralArea[]>([]);
@@ -60,6 +82,9 @@ function VettingPageInner() {
   const [appliedFilterContest, setAppliedFilterContest] = useState('');
   const [filterHasErrors, setFilterHasErrors] = useState(false);
   const [appliedFilterHasErrors, setAppliedFilterHasErrors] = useState(false);
+  const [filterStation, setFilterStation] = useState('');
+  const [appliedFilterStation, setAppliedFilterStation] = useState('');
+  const [pollingStations, setPollingStations] = useState<PollingStationOption[]>([]);
 
   // Quick search (Search tab)
   const [quickSearch, setQuickSearch] = useState('');
@@ -75,8 +100,6 @@ function VettingPageInner() {
   const [correctionError, setCorrectionError] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   
-  // Edit form
-  const [editForm, setEditForm] = useState<Record<string, string>>({});
   // Vetting questions
   const [vettingQuestions, setVettingQuestions] = useState<VettingQuestionResponse[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -139,13 +162,25 @@ function VettingPageInner() {
       if (appliedFilterStatus) params.set('status', appliedFilterStatus);
       if (appliedFilterContest) params.set('contestStatus', appliedFilterContest);
       if (appliedFilterHasErrors) params.set('hasErrors', 'true');
-      
+      if (vettingFocus === 'polling_station' && appliedFilterStation) {
+        params.set('stationCode', appliedFilterStation);
+      }
+
       const res = await fetch(`/api/candidates?${params.toString()}`);
       if (!res.ok) throw new Error('Failed');
       const data = await res.json();
       setCandidates(data);
     } catch (err) { console.error('Error:', err); }
-  }, [appliedSearch, appliedFilterArea, appliedFilterPosition, appliedFilterStatus, appliedFilterContest, appliedFilterHasErrors]);
+  }, [
+    appliedSearch,
+    appliedFilterArea,
+    appliedFilterPosition,
+    appliedFilterStatus,
+    appliedFilterContest,
+    appliedFilterHasErrors,
+    appliedFilterStation,
+    vettingFocus,
+  ]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -162,6 +197,25 @@ function VettingPageInner() {
       setAreas(await res.json());
     } catch (err) { console.error(err); }
   }, []);
+
+  useEffect(() => {
+    if (vettingFocus !== 'polling_station') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const q = filterArea ? `?areaId=${encodeURIComponent(filterArea)}` : '';
+        const res = await fetch(`/api/polling-stations${q}`);
+        if (!res.ok) throw new Error('Failed');
+        const data: PollingStationOption[] = await res.json();
+        if (!cancelled) setPollingStations(Array.isArray(data) ? data : []);
+      } catch {
+        if (!cancelled) setPollingStations([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [vettingFocus, filterArea]);
 
   const fetchVettingQuestions = useCallback(async (candidateId: string) => {
     try {
@@ -183,25 +237,20 @@ function VettingPageInner() {
     init();
   }, [fetchCandidates, fetchAreas, fetchStats]);
 
-  useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
+  const refreshLists = useCallback(async () => {
+    setLoading(true);
+    try {
+      await Promise.all([fetchCandidates(), fetchStats()]);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchCandidates, fetchStats]);
 
   const openPanel = async (candidate: Candidate) => {
     setSelectedCandidate(candidate);
     setPanelOpen(true);
     setCorrectionForm({ electoralAreaId: candidate.electoralAreaId });
     setRejectReason('');
-    setEditForm({
-      formNumber: candidate.formNumber,
-      surname: candidate.surname,
-      firstName: candidate.firstName,
-      middleName: candidate.middleName || '',
-      phoneNumber: candidate.phoneNumber,
-      age: candidate.age?.toString() || '',
-      position: candidate.position,
-      electoralAreaId: candidate.electoralAreaId,
-      delegateType: candidate.delegateType,
-      comment: candidate.comment || '',
-    });
     // Fetch vetting questions
     setLoadingQuestions(true);
     const questions = await fetchVettingQuestions(candidate.id);
@@ -217,6 +266,7 @@ function VettingPageInner() {
       const endpoint = action === 'verify' ? `/api/candidates/${id}/verify` : action === 'approve' ? `/api/candidates/${id}/approve` : `/api/candidates/${id}/reject`;
       if (action === 'reject' && !rejectReason.trim()) {
         alert('Please provide a rejection reason before rejecting.');
+        setSavingId(null);
         return;
       }
       const res = await fetch(endpoint, {
@@ -265,21 +315,6 @@ function VettingPageInner() {
     }
   };
 
-  const saveEdit = async () => {
-    if (!selectedCandidate) return;
-    setSavingId(selectedCandidate.id);
-    try {
-      const payload: Record<string, unknown> = { ...editForm };
-      if (editForm.age) payload.age = parseInt(editForm.age, 10);
-      const res = await fetch(`/api/candidates/${selectedCandidate.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error('Failed');
-      await Promise.all([fetchCandidates(), fetchStats()]);
-      notifyDashboardRefresh();
-      setPanelOpen(false);
-    } catch (err) { alert('Failed to save'); }
-    finally { setSavingId(null); }
-  };
-
   const handleCorrectionChange = (field: string, value: string) => {
     setCorrectionForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -311,7 +346,57 @@ function VettingPageInner() {
     return `${c.surname.toUpperCase()}, ${c.firstName}${middle}`;
   };
 
-  const getAreaName = (id: string) => areas.find(a => a.id === id)?.name || id;
+  const getAreaName = (id: string) => areas.find((a) => a.id === id)?.name || id;
+  const getAreaCode = (id: string) => areas.find((a) => a.id === id)?.code || '';
+
+  const sortedPollingStations = useMemo(() => {
+    return [...pollingStations].sort((a, b) => {
+      const an = areas.find((x) => x.id === a.electoralAreaId)?.name ?? '';
+      const bn = areas.find((x) => x.id === b.electoralAreaId)?.name ?? '';
+      if (an !== bn) return an.localeCompare(bn);
+      return a.name.localeCompare(b.name);
+    });
+  }, [pollingStations, areas]);
+
+  useEffect(() => {
+    if (vettingFocus !== 'polling_station' || !filterStation) return;
+    if (pollingStations.length === 0) return;
+    if (!pollingStations.some((s) => s.code === filterStation)) {
+      setFilterStation('');
+    }
+  }, [vettingFocus, filterStation, pollingStations]);
+
+  const formatContestLabel = (s: string) => {
+    switch (s) {
+      case 'UNOPPOSED':
+        return 'Unopposed';
+      case 'CONTESTED':
+        return 'Contested';
+      case 'VACANT':
+        return 'Vacant';
+      case 'PENDING':
+        return 'Pending';
+      default:
+        return s;
+    }
+  };
+
+  const positionFilterOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const p of CANONICAL_DELEGATE_POSITIONS) {
+      seen.add(p);
+      out.push(p);
+    }
+    for (const c of candidates) {
+      const p = (c.position ?? '').trim();
+      if (p && !seen.has(p)) {
+        seen.add(p);
+        out.push(p);
+      }
+    }
+    return out.sort((a, b) => compareDelegatePositionCsvOrder(a, b));
+  }, [candidates]);
 
   const exportVettingData = () => {
     const header = [
@@ -438,27 +523,50 @@ function VettingPageInner() {
 
   const getBadgeClass = (type: string, value: string) => {
     const map: Record<string, Record<string, string>> = {
-      status: { 'IMPORTED': 'issued', 'VETTED': 'pending', 'APPROVED': 'approved', 'REJECTED': 'rejected' },
+      status: {
+        ISSUED: 'issued',
+        IMPORTED: 'issued',
+        VETTED: 'pending',
+        APPROVED: 'approved',
+        REJECTED: 'rejected',
+      },
       verification: { 'VERIFIED': 'verified', 'NOT_VERIFIED': 'not-verified' },
       contest: { 'UNOPPOSED': 'unopposed', 'CONTESTED': 'contested', 'VACANT': 'vacant', 'PENDING': 'pending' },
     };
     return map[type]?.[value] || 'issued';
   };
 
-  const allPositions = Array.from(new Set(candidates.map(c => c.position).filter(Boolean)));
-
   const rowsForDuplicates = activeTab === 'search' ? quickResults : candidates;
   const isRowError = (candidate: Candidate) =>
     !candidate.electoralAreaId || canonicalizeDelegatePosition(candidate.position) === null;
+  const needsStationInPollingMode = (candidate: Candidate) =>
+    vettingFocus === 'polling_station' && !(candidate.pollingStationCode ?? '').trim();
   const hasDuplicatePhone = (candidate: Candidate) =>
     rowsForDuplicates.filter((c) => c.phoneNumber === candidate.phoneNumber).length > 1;
 
+  const setVettingFocusMode = (next: VettingFocus) => {
+    if (next === 'electoral') {
+      setFilterStation('');
+      setAppliedFilterStation('');
+    }
+    const sp = new URLSearchParams(routeSearchParams.toString());
+    if (next === 'polling_station') sp.set('focus', 'polling');
+    else sp.delete('focus');
+    const qs = sp.toString();
+    router.replace(qs ? `/vetting?${qs}` : '/vetting');
+  };
+
   const openBrowseTab = () => {
-    router.replace('/vetting');
+    const sp = new URLSearchParams(routeSearchParams.toString());
+    sp.delete('tab');
+    const qs = sp.toString();
+    router.replace(qs ? `/vetting?${qs}` : '/vetting');
   };
 
   const openSearchTab = () => {
-    router.replace('/vetting?tab=search');
+    const sp = new URLSearchParams(routeSearchParams.toString());
+    sp.set('tab', 'search');
+    router.replace(`/vetting?${sp.toString()}`);
   };
 
   const editCandidateHref = (id: string) => {
@@ -474,7 +582,11 @@ function VettingPageInner() {
     { key: 'NAME_MATCHES_REGISTER', question: 'Name matches Party Register - Verified against the official party register' },
     { key: 'NATIONAL_ID_PRESENTED', question: 'National ID (Voters Card or Ghana Card) - Presented valid national identification' },
     { key: 'PHOTO_MATCHES', question: 'Passport photo matches applicant - Photo on form matches the person present' },
-    { key: 'MEMBERSHIP_CONFIRMED', question: 'Membership confirmed at station level - Local party officials verified membership' },
+    {
+      key: 'MEMBERSHIP_CONFIRMED',
+      question:
+        'Membership confirmed at local level — Party officials verified membership for this electoral area / branch',
+    },
   ];
 
   const setVettingResponse = async (questionKey: string, nextResponse: boolean) => {
@@ -501,8 +613,9 @@ function VettingPageInner() {
   };
 
   const getVettingProgress = () => {
-    const answered = vettingQuestions.filter(q => q.response).length;
-    return { answered, total: VETTING_QUESTIONS.length, complete: answered === VETTING_QUESTIONS.length };
+    const yesCount = vettingQuestions.filter((q) => q.response === true).length;
+    const total = VETTING_QUESTIONS.length;
+    return { answered: yesCount, total, complete: yesCount === total };
   };
 
   const progress = getVettingProgress();
@@ -513,6 +626,7 @@ function VettingPageInner() {
     setAppliedFilterStatus(filterStatus);
     setAppliedFilterContest(filterContest);
     setAppliedFilterHasErrors(filterHasErrors);
+    setAppliedFilterStation(vettingFocus === 'polling_station' ? filterStation : '');
   };
 
   const clearFilters = () => {
@@ -522,6 +636,7 @@ function VettingPageInner() {
     setFilterStatus('');
     setFilterContest('');
     setFilterHasErrors(false);
+    setFilterStation('');
 
     setAppliedSearch('');
     setAppliedFilterArea('');
@@ -529,6 +644,7 @@ function VettingPageInner() {
     setAppliedFilterStatus('');
     setAppliedFilterContest('');
     setAppliedFilterHasErrors(false);
+    setAppliedFilterStation('');
   };
 
   const goBack = () => {
@@ -548,7 +664,19 @@ function VettingPageInner() {
           <div className="header-content">
             <div>
               <h1>Vetting Dashboard</h1>
-              <div className="header-subtitle">Review, validate, and manage candidate records</div>
+              <div className="header-subtitle">
+                {vettingFocus === 'polling_station' ? (
+                  <>
+                    You are in <strong>polling-station workflow</strong>: narrow the list by station, vet delegates linked to that site,
+                    and still fix area + canonical role when needed. Slots and contest logic remain per electoral area and position.
+                  </>
+                ) : (
+                  <>
+                    Review delegates by electoral area and canonical role. Verification and approval use the area + position slot
+                    (polling station is optional reference data). Use the toggle below to switch to polling-station filtering.
+                  </>
+                )}
+              </div>
             </div>
             <div className="header-actions">
               <button type="button" className="btn btn-secondary" onClick={goBack}>
@@ -560,6 +688,9 @@ function VettingPageInner() {
                   <Link href="/edit-candidate" className="btn btn-secondary">Edit candidate</Link>
                   <Link href="/import" className="btn btn-secondary">📥 Import</Link>
                   <Link href="/reports" className="btn btn-secondary">📋 Reports</Link>
+                  <Link href="/polling-stations" className="btn btn-secondary">
+                    Area slots
+                  </Link>
                 </>
               ) : null}
             </div>
@@ -577,9 +708,59 @@ function VettingPageInner() {
             <div className="stat-card rejected"><h3>Rejected</h3><div className="value">{stats.rejectedCount}</div></div>
             <div className="stat-card unopposed"><h3>Unopposed</h3><div className="value">{stats.unopposedCount}</div></div>
             <div className="stat-card contested"><h3>Contested</h3><div className="value">{stats.contestedCount}</div></div>
-            <div className="stat-card vacant"><h3>Vacant</h3><div className="value">{stats.vacantCount}</div></div>
+            <div className="stat-card vacant"><h3>Vacant slots</h3><div className="value">{stats.vacantCount}</div></div>
+            {typeof stats.errorCount === 'number' ? (
+              <div className="stat-card pending">
+                <h3>Data issues</h3>
+                <div className="value">{stats.errorCount}</div>
+                <small style={{ display: 'block', marginTop: '0.25rem', opacity: 0.85 }}>Non-canonical role</small>
+              </div>
+            ) : null}
           </div>
         )}
+
+        <div
+          className="section"
+          style={{
+            marginBottom: '1.25rem',
+            padding: '1rem 1.25rem',
+            background: 'var(--surface-elevated, var(--gray-50))',
+            borderRadius: 'var(--radius)',
+            border: '1px solid var(--border-light)',
+          }}
+        >
+          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.65rem' }}>
+            Vetting scope
+          </div>
+          <div
+            role="group"
+            aria-label="Choose vetting workflow"
+            style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'stretch' }}
+          >
+            <button
+              type="button"
+              onClick={() => setVettingFocusMode('electoral')}
+              className={`btn btn-sm ${vettingFocus === 'electoral' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ flex: '1 1 220px', textAlign: 'left', justifyContent: 'flex-start', whiteSpace: 'normal', lineHeight: 1.35, padding: '0.65rem 0.85rem' }}
+            >
+              <span style={{ display: 'block', fontWeight: 700 }}>Electoral area &amp; role</span>
+              <span style={{ display: 'block', fontSize: '0.78rem', opacity: 0.92, fontWeight: 400, marginTop: '0.2rem' }}>
+                Default: filter by area and canonical delegate position (seven slots per area).
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setVettingFocusMode('polling_station')}
+              className={`btn btn-sm ${vettingFocus === 'polling_station' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ flex: '1 1 220px', textAlign: 'left', justifyContent: 'flex-start', whiteSpace: 'normal', lineHeight: 1.35, padding: '0.65rem 0.85rem' }}
+            >
+              <span style={{ display: 'block', fontWeight: 700 }}>Polling station</span>
+              <span style={{ display: 'block', fontSize: '0.78rem', opacity: 0.92, fontWeight: 400, marginTop: '0.2rem' }}>
+                Optional: filter candidates by linked polling station (legacy / field workflow). URL: <code style={{ fontSize: '0.72rem' }}>?focus=polling</code>
+              </span>
+            </button>
+          </div>
+        </div>
 
         <div
           role="tablist"
@@ -618,10 +799,28 @@ function VettingPageInner() {
         {activeTab === 'browse' ? (
         <div className="section">
           <div className="section-header">
-            <h2 className="section-title">Candidate Management</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div>
+              <h2 className="section-title">Candidate management</h2>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.35rem 0 0', maxWidth: '42rem' }}>
+                {vettingFocus === 'polling_station' ? (
+                  <>
+                    Filter by polling station (optionally narrow the station list with an area first), then canonical role and status.
+                    Rows without a linked station are flagged in this mode. Contest labels still reflect area + position slots.
+                  </>
+                ) : (
+                  <>
+                    Filter by electoral area and canonical role. Use <strong>Show errors</strong> for rows that need a valid role label.
+                    Contest labels reflect approved delegates per area slot.
+                  </>
+                )}
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0, flexWrap: 'wrap' }}>
               <span className="badge badge-pending">{candidates.length} records</span>
-              <button className="btn btn-secondary btn-sm" onClick={exportVettingData} disabled={loading || candidates.length === 0}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => void refreshLists()} disabled={loading}>
+                {loading ? 'Refreshing…' : 'Refresh'}
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={exportVettingData} disabled={loading || candidates.length === 0}>
                 Export CSV
               </button>
             </div>
@@ -633,20 +832,51 @@ function VettingPageInner() {
               <input type="text" className="input" placeholder="Search name, phone, form #..." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <div className="filter-group">
-              <select className="select" value={filterArea} onChange={(e) => setFilterArea(e.target.value)}>
+              <select
+                className="select"
+                value={filterArea}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFilterArea(v);
+                  if (vettingFocus === 'polling_station') setFilterStation('');
+                }}
+              >
                 <option value="">All Areas</option>
                 {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
+            {vettingFocus === 'polling_station' ? (
+              <div className="filter-group">
+                <select
+                  className="select"
+                  value={filterStation}
+                  onChange={(e) => setFilterStation(e.target.value)}
+                  aria-label="Filter by polling station"
+                  title="Filter candidates linked to this polling station code"
+                >
+                  <option value="">All polling stations</option>
+                  {sortedPollingStations.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {getAreaName(s.electoralAreaId)} — {s.name} ({s.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div className="filter-group">
               <select className="select" value={filterPosition} onChange={(e) => setFilterPosition(e.target.value)}>
                 <option value="">All Positions</option>
-                {allPositions.map(p => <option key={p} value={p}>{p}</option>)}
+                {positionFilterOptions.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="filter-group">
               <select className="select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                 <option value="">All Status</option>
+                <option value="ISSUED">Issued</option>
                 <option value="IMPORTED">Pending</option>
                 <option value="VETTED">Vetted</option>
                 <option value="APPROVED">Approved</option>
@@ -659,6 +889,7 @@ function VettingPageInner() {
                 <option value="UNOPPOSED">Unopposed</option>
                 <option value="CONTESTED">Contested</option>
                 <option value="VACANT">Vacant</option>
+                <option value="PENDING">Pending / unset</option>
               </select>
             </div>
             <div className="filter-group">
@@ -686,7 +917,10 @@ function VettingPageInner() {
           ) : (
             <div className="candidate-grid">
               {candidates.map((c) => (
-                <div key={c.id} className={`candidate-card ${isRowError(c) ? 'error' : ''}`}>
+                <div
+                  key={c.id}
+                  className={`candidate-card ${isRowError(c) || needsStationInPollingMode(c) ? 'error' : ''}`}
+                >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                     <div>
                       <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>{c.formNumber}</div>
@@ -695,7 +929,7 @@ function VettingPageInner() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-end' }}>
                       <span className={`badge badge-${getBadgeClass('status', c.status)}`} style={{ fontSize: '0.7rem' }}>{c.status}</span>
                       <span className={`badge badge-${getBadgeClass('contest', c.contestStatus)}`} style={{ fontSize: '0.7rem' }}>
-                        {c.contestStatus === 'UNOPPOSED' ? 'Unopposed' : c.contestStatus === 'CONTESTED' ? 'Contested' : c.contestStatus}
+                        {formatContestLabel(c.contestStatus)}
                       </span>
                     </div>
                   </div>
@@ -703,8 +937,10 @@ function VettingPageInner() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Phone</strong>{c.phoneNumber}</div>
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Position</strong>{c.position}</div>
-                    <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Area</strong>{getAreaName(c.electoralAreaId)}</div>
-                    <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Station</strong>{c.pollingStationCode || 'Not set'}</div>
+                    <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Area</strong>{getAreaName(c.electoralAreaId)}{getAreaCode(c.electoralAreaId) ? ` (${getAreaCode(c.electoralAreaId)})` : ''}</div>
+                    {(c.pollingStationCode || c.pollingStation?.name) ? (
+                      <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Poll station (opt.)</strong>{c.pollingStation?.name ? `${c.pollingStation.name} · ` : ''}{c.pollingStationCode || '—'}</div>
+                    ) : null}
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Verified</strong>
                       <span className={`badge ${c.verificationStatus === 'VERIFIED' ? 'badge-verified' : 'badge-not-verified'}`} style={{ fontSize: '0.7rem' }}>
                         {c.verificationStatus === 'VERIFIED' ? 'Yes' : 'No'}
@@ -715,9 +951,12 @@ function VettingPageInner() {
                     </div>
                   </div>
 
-                  {(isRowError(c) || hasDuplicatePhone(c)) && (
+                  {(isRowError(c) || needsStationInPollingMode(c) || hasDuplicatePhone(c)) && (
                     <div style={{ fontSize: '0.75rem', marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                       {isRowError(c) && <div className="warning-item error">⚠ Missing electoral area or invalid role</div>}
+                      {needsStationInPollingMode(c) && (
+                        <div className="warning-item duplicate">⚠ No polling station linked (add in Edit)</div>
+                      )}
                       {hasDuplicatePhone(c) && <div className="warning-item duplicate">⚠ Duplicate phone</div>}
                     </div>
                   )}
@@ -749,7 +988,14 @@ function VettingPageInner() {
             </div>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.5 }}>
-            Type at least two characters. Results update as you type (name, phone, or form number).
+            Type at least two characters. Results update as you type (name, phone, or form number). Open a card for full vetting
+            checklist and area + role context.
+            {vettingFocus === 'polling_station' ? (
+              <span>
+                {' '}
+                In <strong>polling-station scope</strong>, use Browse &amp; filters to narrow by station; search is still global.
+              </span>
+            ) : null}
           </p>
           <div className="filter-group" style={{ maxWidth: '100%', marginBottom: '1rem' }}>
             <label htmlFor="vetting-quick-search">Search</label>
@@ -773,7 +1019,10 @@ function VettingPageInner() {
           {!quickSearching && debouncedQuickSearch.length >= 2 && quickResults.length > 0 && (
             <div className="candidate-grid">
               {quickResults.map((c) => (
-                <div key={c.id} className={`candidate-card ${isRowError(c) ? 'error' : ''}`}>
+                <div
+                  key={c.id}
+                  className={`candidate-card ${isRowError(c) || needsStationInPollingMode(c) ? 'error' : ''}`}
+                >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                     <div>
                       <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>{c.formNumber}</div>
@@ -782,7 +1031,7 @@ function VettingPageInner() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-end' }}>
                       <span className={`badge badge-${getBadgeClass('status', c.status)}`} style={{ fontSize: '0.7rem' }}>{c.status}</span>
                       <span className={`badge badge-${getBadgeClass('contest', c.contestStatus)}`} style={{ fontSize: '0.7rem' }}>
-                        {c.contestStatus === 'UNOPPOSED' ? 'Unopposed' : c.contestStatus === 'CONTESTED' ? 'Contested' : c.contestStatus}
+                        {formatContestLabel(c.contestStatus)}
                       </span>
                     </div>
                   </div>
@@ -790,8 +1039,10 @@ function VettingPageInner() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Phone</strong>{c.phoneNumber}</div>
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Position</strong>{c.position}</div>
-                    <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Area</strong>{getAreaName(c.electoralAreaId)}</div>
-                    <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Station</strong>{c.pollingStationCode || 'Not set'}</div>
+                    <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Area</strong>{getAreaName(c.electoralAreaId)}{getAreaCode(c.electoralAreaId) ? ` (${getAreaCode(c.electoralAreaId)})` : ''}</div>
+                    {(c.pollingStationCode || c.pollingStation?.name) ? (
+                      <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Poll station (opt.)</strong>{c.pollingStation?.name ? `${c.pollingStation.name} · ` : ''}{c.pollingStationCode || '—'}</div>
+                    ) : null}
                     <div><strong style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.75rem', display: 'block' }}>Verified</strong>
                       <span className={`badge ${c.verificationStatus === 'VERIFIED' ? 'badge-verified' : 'badge-not-verified'}`} style={{ fontSize: '0.7rem' }}>
                         {c.verificationStatus === 'VERIFIED' ? 'Yes' : 'No'}
@@ -802,9 +1053,12 @@ function VettingPageInner() {
                     </div>
                   </div>
 
-                  {(isRowError(c) || hasDuplicatePhone(c)) && (
+                  {(isRowError(c) || needsStationInPollingMode(c) || hasDuplicatePhone(c)) && (
                     <div style={{ fontSize: '0.75rem', marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                       {isRowError(c) && <div className="warning-item error">⚠ Missing electoral area or invalid role</div>}
+                      {needsStationInPollingMode(c) && (
+                        <div className="warning-item duplicate">⚠ No polling station linked (add in Edit)</div>
+                      )}
                       {hasDuplicatePhone(c) && <div className="warning-item duplicate">⚠ Duplicate phone</div>}
                     </div>
                   )}
@@ -829,8 +1083,8 @@ function VettingPageInner() {
 
       {/* Candidate Detail Panel */}
       {panelOpen && selectedCandidate && (
-        <div className="modal-overlay">
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" role="presentation" onClick={closePanel}>
+          <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Vetting: {selectedCandidate.surname}, {selectedCandidate.firstName}</h2>
               <button className="modal-close" onClick={closePanel}>&times;</button>
@@ -858,7 +1112,7 @@ function VettingPageInner() {
                   <div>
                     <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Contest</div>
                     <span className={`badge badge-${getBadgeClass('contest', selectedCandidate.contestStatus)}`} style={{ fontSize: '0.875rem', padding: '0.375rem 0.75rem' }}>
-                      {selectedCandidate.contestStatus}
+                      {formatContestLabel(selectedCandidate.contestStatus)}
                     </span>
                   </div>
                 </div>
@@ -868,9 +1122,32 @@ function VettingPageInner() {
                   <div><strong>Name:</strong> {formatName(selectedCandidate)}</div>
                   <div><strong>Phone:</strong> {selectedCandidate.phoneNumber}</div>
                   <div><strong>Age:</strong> {selectedCandidate.age || 'Not set'}</div>
-                  <div><strong>Electoral Area:</strong> {getAreaName(selectedCandidate.electoralAreaId)}</div>
-                  <div><strong>Polling Station:</strong> {selectedCandidate.pollingStationCode || 'Not set'}</div>
-                  <div><strong>Position:</strong> {selectedCandidate.position}</div>
+                  <div>
+                    <strong>Electoral area:</strong> {getAreaName(selectedCandidate.electoralAreaId)}
+                    {getAreaCode(selectedCandidate.electoralAreaId)
+                      ? ` (${getAreaCode(selectedCandidate.electoralAreaId)})`
+                      : ''}
+                  </div>
+                  <div>
+                    <strong>Poll station (optional):</strong>{' '}
+                    {selectedCandidate.pollingStation?.name
+                      ? `${selectedCandidate.pollingStation.name} · `
+                      : ''}
+                    {selectedCandidate.pollingStationCode || '—'}
+                    {vettingFocus === 'polling_station' && !selectedCandidate.pollingStationCode?.trim() ? (
+                      <span style={{ color: 'var(--warning, #b45309)', fontSize: '0.8rem', display: 'block', marginTop: '0.25rem' }}>
+                        Polling-station scope: this row has no station code yet — link one via Edit if you are vetting by station.
+                      </span>
+                    ) : null}
+                  </div>
+                  <div>
+                    <strong>Position:</strong> {selectedCandidate.position}
+                    {canonicalizeDelegatePosition(selectedCandidate.position) === null ? (
+                      <span style={{ color: 'var(--danger)', fontSize: '0.8rem', display: 'block', marginTop: '0.25rem' }}>
+                        Not a canonical role — edit the record before verification.
+                      </span>
+                    ) : null}
+                  </div>
                   <div><strong>Delegate Type:</strong> {selectedCandidate.delegateType}</div>
                 </div>
               </div>
@@ -919,7 +1196,7 @@ function VettingPageInner() {
                     background: progress.complete ? 'var(--success)' : 'var(--warning)',
                     color: 'white'
                   }}>
-                    {progress.answered}/{progress.total} Verified
+                    {progress.answered}/{progress.total} Yes
                   </div>
                 </div>
 
@@ -1045,6 +1322,12 @@ function VettingPageInner() {
                     />
                   </div>
                 )}
+                {selectedCandidate.verificationStatus !== 'VERIFIED' && isRowError(selectedCandidate) && (
+                  <p className="error" style={{ marginBottom: '0.75rem', fontSize: '0.875rem' }}>
+                    Assign a valid electoral area and one of the seven canonical roles (use <strong>Edit candidate</strong>) before
+                    verification.
+                  </p>
+                )}
                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                   <button className="btn btn-secondary" onClick={closePanel}>
                     ← Back
@@ -1053,7 +1336,16 @@ function VettingPageInner() {
                     <button
                       className="btn btn-success"
                       onClick={() => handleAction(selectedCandidate.id, 'verify')}
-                      disabled={savingId === selectedCandidate.id || !selectedCandidate.electoralAreaId}
+                      disabled={
+                        savingId === selectedCandidate.id ||
+                        !selectedCandidate.electoralAreaId ||
+                        isRowError(selectedCandidate)
+                      }
+                      title={
+                        isRowError(selectedCandidate)
+                          ? 'Fix area and canonical role before verifying'
+                          : undefined
+                      }
                     >
                       ✓ Verify Candidate
                     </button>
