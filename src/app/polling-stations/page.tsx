@@ -7,7 +7,7 @@ import { AppShell } from '@/components/dashboard/AppShell';
 import { CANONICAL_POSITION_COUNT, CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
 import { hasSystemWideAccess } from '@/lib/roles';
 
-interface ElectoralArea {
+interface ElectoralAreaFilter {
   id: string;
   name: string;
   code: string;
@@ -18,29 +18,29 @@ interface SlotTotals {
   contestedSlots: number;
   unopposedSlots: number;
   canonicalLogicalSlots: number;
-  pollingStationCount: number;
+  electoralAreaCount: number;
 }
 
-interface StationSlotRow {
+interface AreaSlotRow {
+  id: string;
   code: string;
   name: string;
-  electoralAreaName: string;
   vacantOfSeven: number;
   contestedOfSeven: number;
   filledOfSeven: number;
   slots: { position: string; occupancy: number; slotState: 'vacant' | 'filled' | 'contested' }[];
 }
 
-export default function PollingStationsPage() {
+export default function ElectoralAreasSlotsPage() {
   const router = useRouter();
   const [role, setRole] = useState('');
-  const [areas, setAreas] = useState<ElectoralArea[]>([]);
+  const [areas, setAreas] = useState<ElectoralAreaFilter[]>([]);
   const [filterAreaId, setFilterAreaId] = useState('');
   const [filterDelegateType, setFilterDelegateType] = useState('');
   const [appliedAreaId, setAppliedAreaId] = useState('');
   const [appliedDelegateType, setAppliedDelegateType] = useState('');
   const [totals, setTotals] = useState<SlotTotals | null>(null);
-  const [stations, setStations] = useState<StationSlotRow[]>([]);
+  const [areaRows, setAreaRows] = useState<AreaSlotRow[]>([]);
   const [candidateRecords, setCandidateRecords] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,13 +87,30 @@ export default function PollingStationsPage() {
       const res = await fetch(`/api/polling-station-slots?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed');
       const data = await res.json();
-      setTotals(data.totals ?? null);
-      setStations(data.stations ?? []);
+      const t = data.totals ?? null;
+      setTotals(
+        t
+          ? {
+              vacantSlots: t.vacantSlots,
+              contestedSlots: t.contestedSlots,
+              unopposedSlots: t.unopposedSlots,
+              canonicalLogicalSlots: t.canonicalLogicalSlots,
+              electoralAreaCount:
+                typeof t.electoralAreaCount === 'number'
+                  ? t.electoralAreaCount
+                  : typeof t.pollingStationCount === 'number'
+                    ? t.pollingStationCount
+                    : 0,
+            }
+          : null
+      );
+      const rows = (data.areas ?? data.stations ?? []) as AreaSlotRow[];
+      setAreaRows(Array.isArray(rows) ? rows : []);
       setCandidateRecords(typeof data.candidateRecordsInView === 'number' ? data.candidateRecordsInView : 0);
       setExpanded(null);
     } catch {
       setTotals(null);
-      setStations([]);
+      setAreaRows([]);
     } finally {
       setLoading(false);
     }
@@ -126,13 +143,15 @@ export default function PollingStationsPage() {
       <div className="app-main-inner">
         <header className="dashboard-page-header">
           <div>
-            <h1>Polling stations &amp; vacancy</h1>
+            <h1>Electoral areas &amp; vacancy</h1>
             <p style={{ color: 'var(--text-secondary)', marginTop: '0.35rem', fontSize: '0.9rem' }}>
-              Exactly {CANONICAL_POSITION_COUNT} delegate roles exist per polling station (
+              Exactly {CANONICAL_POSITION_COUNT} delegate roles exist per electoral area (
               {CANONICAL_DELEGATE_POSITIONS.join(', ')}
               ). Vacant / contested counts use that grid; each contested seat is still counted once.
             </p>
           </div>
+
+
           <div className="dashboard-meta">
             <Link href="/" className="btn btn-secondary btn-sm">
               Dashboard
@@ -207,8 +226,8 @@ export default function PollingStationsPage() {
         {totals ? (
           <div className="stats-row" style={{ marginBottom: '1.25rem' }}>
             <div className="stat-card total">
-              <h3>Polling stations</h3>
-              <div className="value">{totals.pollingStationCount.toLocaleString()}</div>
+              <h3>Electoral areas</h3>
+              <div className="value">{totals.electoralAreaCount.toLocaleString()}</div>
             </div>
             <div className="stat-card vacant">
               <h3>Vacant seats</h3>
@@ -226,7 +245,7 @@ export default function PollingStationsPage() {
               <h3>Logic seats total</h3>
               <div className="value">{totals.canonicalLogicalSlots.toLocaleString()}</div>
               <small style={{ display: 'block', marginTop: '0.25rem', opacity: 0.85 }}>
-                #{CANONICAL_POSITION_COUNT} × stations
+                #{CANONICAL_POSITION_COUNT} × areas
               </small>
             </div>
           </div>
@@ -234,58 +253,56 @@ export default function PollingStationsPage() {
 
         <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
           Candidate records counted for this view (after filters): <strong>{candidateRecords.toLocaleString()}</strong>. Each
-          person should occupy one canonical role only; contested seats show where two or more records share station + role.
+          person should occupy one canonical role per electoral area; contested seats show where two or more records share the same area + role.
         </p>
 
         {loading ? (
-          <div className="loading">Loading stations…</div>
-        ) : stations.length === 0 ? (
-          <div className="empty-state">No polling stations loaded for these filters.</div>
+          <div className="loading">Loading areas…</div>
+        ) : areaRows.length === 0 ? (
+          <div className="empty-state">No electoral areas loaded for these filters.</div>
         ) : (
           <div className="table-container">
             <table>
               <thead>
                 <tr>
                   <th style={{ width: '2rem' }} />
-                  <th>Station code</th>
+                  <th>Area code</th>
                   <th>Name</th>
-                  <th>Electoral area</th>
                   <th style={{ textAlign: 'right' }}>Vacant / {CANONICAL_POSITION_COUNT}</th>
                   <th style={{ textAlign: 'right' }}>Filled</th>
                   <th style={{ textAlign: 'right' }}>Contested seats</th>
                 </tr>
               </thead>
               <tbody>
-                {stations.map((s) => {
-                  const open = expanded === s.code;
+                {areaRows.map((row) => {
+                  const open = expanded === row.id;
                   return (
-                    <Fragment key={s.code}>
+                    <Fragment key={row.id}>
                       <tr>
                         <td>
                           <button
                             type="button"
                             className="btn btn-secondary btn-sm"
                             aria-expanded={open}
-                            onClick={() => setExpanded(open ? null : s.code)}
+                            onClick={() => setExpanded(open ? null : row.id)}
                             title={open ? 'Hide positions' : 'Show all 7 positions'}
                           >
                             {open ? '−' : '+'}
                           </button>
                         </td>
                         <td>
-                          <strong>{s.code}</strong>
+                          <strong>{row.code}</strong>
                         </td>
-                        <td>{s.name}</td>
-                        <td>{s.electoralAreaName}</td>
-                        <td style={{ textAlign: 'right' }}>{s.vacantOfSeven}</td>
-                        <td style={{ textAlign: 'right' }}>{s.filledOfSeven}</td>
-                        <td style={{ textAlign: 'right' }}>{s.contestedOfSeven}</td>
+                        <td>{row.name}</td>
+                        <td style={{ textAlign: 'right' }}>{row.vacantOfSeven}</td>
+                        <td style={{ textAlign: 'right' }}>{row.filledOfSeven}</td>
+                        <td style={{ textAlign: 'right' }}>{row.contestedOfSeven}</td>
                       </tr>
                       {open ? (
-                        <tr key={`${s.code}-detail`}>
-                          <td colSpan={7} style={{ background: 'var(--gray-50)', padding: '0.75rem 1rem 1rem' }}>
+                        <tr key={`${row.id}-detail`}>
+                          <td colSpan={6} style={{ background: 'var(--gray-50)', padding: '0.75rem 1rem 1rem' }}>
                             <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
-                              Vacancy by role (this station only)
+                              Vacancy by role (this electoral area)
                             </div>
                             <div className="table-container" style={{ margin: 0 }}>
                               <table>
@@ -297,15 +314,15 @@ export default function PollingStationsPage() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {s.slots.map((row) => (
-                                    <tr key={row.position}>
-                                      <td>{row.position}</td>
-                                      <td style={{ textAlign: 'right' }}>{row.occupancy}</td>
+                                  {row.slots.map((s) => (
+                                    <tr key={s.position}>
+                                      <td>{s.position}</td>
+                                      <td style={{ textAlign: 'right' }}>{s.occupancy}</td>
                                       <td>
-                                        <span className={badgeFor(row.slotState)}>
-                                          {row.slotState === 'vacant'
+                                        <span className={badgeFor(s.slotState)}>
+                                          {s.slotState === 'vacant'
                                             ? 'Vacant'
-                                            : row.slotState === 'filled'
+                                            : s.slotState === 'filled'
                                               ? 'Filled'
                                               : 'Contested'}
                                         </span>

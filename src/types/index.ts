@@ -71,7 +71,7 @@ export interface CandidateStats {
   approvedCount: number;
   rejectedCount: number;
   errorCount: number;
-  // Slot-level metrics (polling_station_code + position)
+  // Slot-level metrics (electoral_area_id + canonical position)
   unopposedSlots: number;
   contestedSlots: number;
   vacantSlots: number;
@@ -93,7 +93,7 @@ export interface CreateCandidateInput {
   phoneNumber: string;
   age?: number;
   electoralAreaId: string;
-  pollingStationCode: string;
+  pollingStationCode?: string | null;
   position: string;
   delegateType: string;
   comment?: string;

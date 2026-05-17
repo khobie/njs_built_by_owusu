@@ -194,12 +194,12 @@ export async function PATCH(
     const relevantChanged =
       updateData.status !== undefined ||
       updateData.pollingStationCode !== undefined ||
-      updateData.position !== undefined;
+      updateData.position !== undefined ||
+      updateData.electoralAreaId !== undefined;
 
     if (relevantChanged) {
-      // Recalculate both old and new slots in case an edit moved the record.
-      await recalculateContestStatusForGroup(existing.pollingStationCode, existing.position);
-      await recalculateContestStatusForGroup(candidate.pollingStationCode, candidate.position);
+      await recalculateContestStatusForGroup(existing.electoralAreaId, existing.position);
+      await recalculateContestStatusForGroup(candidate.electoralAreaId, candidate.position);
     }
 
     return NextResponse.json(candidate);
@@ -225,7 +225,7 @@ export async function DELETE(
       where: { id },
       select: {
         id: true,
-        pollingStationCode: true,
+        electoralAreaId: true,
         position: true,
         electoralArea: { select: { code: true } },
       },
@@ -247,7 +247,7 @@ export async function DELETE(
       where: { id },
     });
 
-    await recalculateContestStatusForGroup(candidate.pollingStationCode, candidate.position);
+    await recalculateContestStatusForGroup(candidate.electoralAreaId, candidate.position);
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -42,7 +42,7 @@ export const ContestDonut = memo(function ContestDonut({ aggregates }: Props) {
       return {
         style: { background: 'var(--gray-200)' } as CSSProperties,
         legend: [
-          { label: 'Contested (7-role grid)', color: 'var(--contested)', value: 0 },
+          { label: 'Contested (7-role grid × area)', color: 'var(--contested)', value: 0 },
           { label: 'Filled single', color: 'var(--unopposed)', value: 0 },
           { label: 'Vacant', color: 'var(--text-tertiary)', value: 0 },
         ],
@@ -79,7 +79,7 @@ export const ContestDonut = memo(function ContestDonut({ aggregates }: Props) {
           </div>
         ))}
         <p style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', maxWidth: '14rem', marginTop: '0.25rem' }}>
-          Whole donut = polling stations × 7 canonical positions ({aggregates.canonicalLogicalSlots} slots).
+          Whole donut = electoral areas × 7 canonical positions ({aggregates.canonicalLogicalSlots} slots).
           Each contested seat still counts once.
         </p>
       </div>

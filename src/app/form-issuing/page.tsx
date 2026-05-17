@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AppShell } from '@/components/dashboard/AppShell';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
@@ -13,13 +13,6 @@ interface ElectoralArea {
   name: string;
   code: string;
 }
-
-interface PollingStation {
-  name: string;
-  code: string;
-  electoralAreaId: string;
-}
-
 
 function makeFormNumber() {
   const stamp = Date.now().toString().slice(-8);
@@ -44,8 +37,6 @@ function sanitizePhoneInput(raw: string): string {
 export default function FormIssuingPage() {
   const router = useRouter();
   const [areas, setAreas] = useState<ElectoralArea[]>([]);
-  const [stations, setStations] = useState<PollingStation[]>([]);
-  const [loadingStations, setLoadingStations] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const [formNumber, setFormNumber] = useState(makeFormNumber());
@@ -56,25 +47,10 @@ export default function FormIssuingPage() {
   const [position, setPosition] = useState('');
   const [delegateType, setDelegateType] = useState<'NEW' | 'OLD'>('NEW');
   const [electoralAreaId, setElectoralAreaId] = useState('');
-  const [pollingStationCode, setPollingStationCode] = useState('');
-  const [stationSearch, setStationSearch] = useState('');
   const [comment, setComment] = useState('');
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
-  const selectedStation = useMemo(
-    () => stations.find((s) => s.code === pollingStationCode),
-    [stations, pollingStationCode]
-  );
-
-  const filteredStations = useMemo(() => {
-    const q = stationSearch.trim().toLowerCase();
-    if (!q) return stations;
-    return stations.filter(
-      (s) => s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q)
-    );
-  }, [stations, stationSearch]);
 
   useEffect(() => {
     fetch('/api/auth/session')
@@ -103,25 +79,6 @@ export default function FormIssuingPage() {
     });
   }, []);
 
-  useEffect(() => {
-    if (!electoralAreaId) {
-      setStations([]);
-      setPollingStationCode('');
-      return;
-    }
-    setLoadingStations(true);
-    setPollingStationCode('');
-    setStationSearch('');
-    fetch(`/api/polling-stations?areaId=${encodeURIComponent(electoralAreaId)}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed');
-        return res.json();
-      })
-      .then((data: PollingStation[]) => setStations(data))
-      .catch(() => setError('Failed to load polling stations for selected area.'))
-      .finally(() => setLoadingStations(false));
-  }, [electoralAreaId]);
-
   const normalizedPhone = normalizeGhanaPhone(phoneNumber);
   const effectivePosition = position;
 
@@ -134,7 +91,6 @@ export default function FormIssuingPage() {
     setPosition('');
     setDelegateType('NEW');
     setElectoralAreaId('');
-    setPollingStationCode('');
     setComment('');
     setError('');
   };
@@ -156,8 +112,8 @@ export default function FormIssuingPage() {
       setError('Please select the position applied for.');
       return;
     }
-    if (!electoralAreaId || !pollingStationCode) {
-      setError('Please select electoral area and polling station.');
+    if (!electoralAreaId) {
+      setError('Please select an electoral area.');
       return;
     }
 
@@ -173,7 +129,6 @@ export default function FormIssuingPage() {
           middleName: middleName.trim() || undefined,
           phoneNumber: normalizedPhone,
           electoralAreaId,
-          pollingStationCode,
           position: effectivePosition,
           delegateType,
           comment: comment.trim() || undefined,
@@ -190,9 +145,8 @@ export default function FormIssuingPage() {
       }
 
       notifyDashboardRefresh();
-      setSuccess(
-        `Delegate registered successfully for ${selectedStation?.name || 'selected station'} (${pollingStationCode}).`
-      );
+      const areaName = areas.find((a) => a.id === electoralAreaId)?.name ?? 'electoral area';
+      setSuccess(`Delegate registered successfully for ${areaName} (${effectivePosition}).`);
       resetForm();
     } catch {
       setError('Network error. Please try again.');
@@ -208,7 +162,7 @@ export default function FormIssuingPage() {
           <div>
             <h1>Form Issuing</h1>
             <p style={{ color: 'var(--text-secondary)', marginTop: '0.35rem', fontSize: '0.9rem' }}>
-              Register delegates purchasing nomination forms. Polling station is stored by code.
+              Register delegates purchasing nomination forms. Each record is tied to one electoral area and canonical role.
             </p>
           </div>
           <div className="dashboard-meta">
@@ -279,49 +233,16 @@ export default function FormIssuingPage() {
               </div>
             </div>
 
-            <div className="grid-2">
-              <div className="form-group">
-                <label>Electoral Area *</label>
-                <select className="select" value={electoralAreaId} onChange={(e) => setElectoralAreaId(e.target.value)} required>
-                  <option value="">Select electoral area</option>
-                  {areas.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Polling Station (Name + Code) *</label>
-                <input
-                  className="input"
-                  value={stationSearch}
-                  onChange={(e) => setStationSearch(e.target.value)}
-                  placeholder="Search station by name or code..."
-                  disabled={!electoralAreaId || loadingStations}
-                  style={{ marginBottom: '0.5rem' }}
-                />
-                <select
-                  className="select"
-                  value={pollingStationCode}
-                  onChange={(e) => setPollingStationCode(e.target.value)}
-                  disabled={!electoralAreaId || loadingStations}
-                  required
-                >
-                  <option value="">
-                    {!electoralAreaId ? 'Select electoral area first' : loadingStations ? 'Loading stations...' : 'Select polling station'}
+            <div className="form-group">
+              <label>Electoral Area *</label>
+              <select className="select" value={electoralAreaId} onChange={(e) => setElectoralAreaId(e.target.value)} required>
+                <option value="">Select electoral area</option>
+                {areas.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
                   </option>
-                  {filteredStations.map((s) => (
-                    <option key={s.code} value={s.code}>
-                      {s.name} ({s.code})
-                    </option>
-                  ))}
-                </select>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.35rem' }}>
-                  Stored as code: <strong>{pollingStationCode || '—'}</strong>
-                  {selectedStation ? ` | Name: ${selectedStation.name}` : ''}
-                </div>
-              </div>
+                ))}
+              </select>
             </div>
 
             <div className="form-group">

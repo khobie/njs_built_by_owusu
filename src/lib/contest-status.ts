@@ -1,38 +1,33 @@
 import { prisma } from '@/lib/prisma';
+import { canonicalizeDelegatePosition } from '@/lib/delegate-positions';
 
 export type ContestStatus = 'UNOPPOSED' | 'CONTESTED' | 'VACANT' | 'PENDING';
 
 type SlotRef = {
-  pollingStationCode: string | null | undefined;
+  electoralAreaId: string | null | undefined;
   position: string | null | undefined;
 };
 
 function makeSlotKey(slot: SlotRef): string | null {
-  const code = (slot.pollingStationCode ?? '').trim();
-  const position = (slot.position ?? '').trim();
-  if (!code || !position) return null;
-  return `${code}::${position}`;
+  const id = (slot.electoralAreaId ?? '').trim();
+  const canon = canonicalizeDelegatePosition(slot.position ?? '');
+  if (!id || !canon) return null;
+  return `${id}::${canon}`;
 }
 
 /**
- * Calculates contest status for all approved candidates
- * Groups by (polling_station_code, position) and determines:
- * - UNOPPOSED: exactly 1 approved candidate
- * - CONTESTED: more than 1 approved candidate  
- * - VACANT: 0 approved candidates
- * - PENDING: candidate not yet approved
+ * Calculates contest status for all candidates (by approved count per electoral area × canonical role).
  */
 export async function calculateContestStatusForAll() {
   const allCandidates = await prisma.candidate.findMany({
     select: {
       id: true,
       status: true,
-      pollingStationCode: true,
+      electoralAreaId: true,
       position: true,
     },
   });
 
-  // Group all candidates by strict slot key (polling_station_code + position).
   const byKey = new Map<string, typeof allCandidates>();
   const missingKeyIds: string[] = [];
 
@@ -54,8 +49,6 @@ export async function calculateContestStatusForAll() {
   let contestedCount = 0;
   let vacantCount = 0;
 
-  // Apply slot status to every candidate in each slot:
-  // approved count 0 => VACANT, 1 => UNOPPOSED, >1 => CONTESTED
   for (const candidatesInSlot of Array.from(byKey.values())) {
     const approvedCount = candidatesInSlot.filter((c) => c.status === 'APPROVED').length;
     const slotStatus: ContestStatus =
@@ -89,29 +82,28 @@ export async function calculateContestStatusForAll() {
 }
 
 /**
- * Recalculate contest status for one slot (polling_station_code + position).
- * Also marks malformed records (missing slot fields) as PENDING.
+ * Recalculate contest status for one slot (electoral area × canonical position).
  */
 export async function recalculateContestStatusForGroup(
-  pollingStationCode: string | null | undefined,
+  electoralAreaId: string | null | undefined,
   position: string | null | undefined
 ) {
-  const key = makeSlotKey({ pollingStationCode, position });
-  if (!key) {
+  const areaId = (electoralAreaId ?? '').trim();
+  const canon = canonicalizeDelegatePosition(position ?? '');
+  if (!areaId || !canon) {
     return calculateContestStatusForAll();
   }
 
-  const [code, pos] = key.split('::');
-  const candidatesInSlot = await prisma.candidate.findMany({
-    where: {
-      pollingStationCode: code,
-      position: pos,
-    },
+  const inArea = await prisma.candidate.findMany({
+    where: { electoralAreaId: areaId },
     select: {
       id: true,
       status: true,
+      position: true,
     },
   });
+
+  const candidatesInSlot = inArea.filter((c) => canonicalizeDelegatePosition(c.position) === canon);
 
   const approvedCount = candidatesInSlot.filter((c) => c.status === 'APPROVED').length;
   const slotStatus: ContestStatus =
@@ -123,13 +115,6 @@ export async function recalculateContestStatusForGroup(
       data: { contestStatus: slotStatus },
     });
   }
-
-  await prisma.candidate.updateMany({
-    where: {
-      OR: [{ pollingStationCode: null }, { pollingStationCode: '' }, { position: '' }],
-    },
-    data: { contestStatus: 'PENDING' },
-  });
 }
 
 /**

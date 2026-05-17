@@ -28,11 +28,11 @@ export async function POST(
     // Check if candidate exists and get their polling station/position before updating
     const candidate = await prisma.candidate.findUnique({
       where: { id },
-      select: { 
-        id: true, 
+      select: {
+        id: true,
         status: true,
-        pollingStationCode: true,
-        position: true
+        electoralAreaId: true,
+        position: true,
       },
     });
 
@@ -70,8 +70,8 @@ export async function POST(
     });
 
     // If the candidate was approved, recalc contest status for their group
-    if (candidate.status === 'APPROVED' && candidate.pollingStationCode) {
-      await recalculateContestStatusForGroup(candidate.pollingStationCode, candidate.position);
+    if (candidate.status === 'APPROVED' && candidate.electoralAreaId) {
+      await recalculateContestStatusForGroup(candidate.electoralAreaId, candidate.position);
     }
 
     const rejected = await prisma.candidate.findUnique({

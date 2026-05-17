@@ -47,10 +47,9 @@ async function verifyCandidate(
       }
     }
 
-    // Only allow verification if polling station is assigned
-    if (body.verificationStatus === 'VERIFIED' && !candidate.pollingStationCode) {
+    if (body.verificationStatus === 'VERIFIED' && !candidate.electoralAreaId?.trim()) {
       return NextResponse.json(
-        { error: 'Cannot verify candidate without a polling station assigned' },
+        { error: 'Cannot verify candidate without an electoral area assigned' },
         { status: 400 }
       );
     }

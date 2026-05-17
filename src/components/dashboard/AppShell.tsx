@@ -103,7 +103,7 @@ export function AppShell({ activeHref, children }: { activeHref: string; childre
         { href: '/form-issuing', label: 'Form Issuing', icon: IconFilePlus },
         { href: '/edit-candidate', label: 'Edit candidate', icon: IconPencil },
         { href: '/vetting', label: 'Vetting', icon: IconClipboard },
-        { href: '/polling-stations', label: 'Poll stations', icon: IconBuilding },
+        { href: '/polling-stations', label: 'Electoral areas', icon: IconBuilding },
         { href: '/reports', label: 'Reports', icon: IconDoc },
         ...(isAdminRole(role) ? ([{ href: '/accounts', label: 'Accounts', icon: IconUsers }] as const) : []),
       ] as const;

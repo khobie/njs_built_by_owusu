@@ -3,8 +3,9 @@ import { prisma } from '@/lib/prisma';
 import {
   aggregateDashboardCandidates,
   type DashboardCandidateInput,
-  type PollingStationBrief,
+  type ElectoralAreaBrief,
 } from '@/lib/dashboard-aggregates';
+import { canonicalizeDelegatePosition } from '@/lib/delegate-positions';
 
 export async function GET() {
   try {
@@ -19,8 +20,7 @@ export async function GET() {
       unverifiedCount,
       approvedCount,
       rejectedCount,
-      errorCount,
-      pollingStationsRaw,
+      electoralAreasRaw,
       candidates,
       byElectoralArea,
       totalCandidates,
@@ -37,15 +37,11 @@ export async function GET() {
       prisma.candidate.count({ where: { verificationStatus: 'NOT_VERIFIED' } }),
       prisma.candidate.count({ where: { status: 'APPROVED' } }),
       prisma.candidate.count({ where: { status: 'REJECTED' } }),
-      prisma.candidate.count({
-        where: { OR: [{ pollingStationCode: null }, { pollingStationCode: '' }] },
-      }),
-      prisma.pollingStation.findMany({
+      prisma.electoralArea.findMany({
         select: {
-          code: true,
+          id: true,
           name: true,
-          electoralAreaId: true,
-          electoralArea: { select: { name: true } },
+          code: true,
         },
       }),
       prisma.candidate.findMany({
@@ -75,11 +71,10 @@ export async function GET() {
       prisma.pollingStation.count(),
     ]);
 
-    const pollingStations: PollingStationBrief[] = pollingStationsRaw.map((s) => ({
-      code: s.code,
-      name: s.name,
-      electoralAreaId: s.electoralAreaId,
-      electoralAreaName: s.electoralArea.name,
+    const electoralAreas: ElectoralAreaBrief[] = electoralAreasRaw.map((a) => ({
+      id: a.id,
+      name: a.name,
+      code: a.code,
     }));
 
     const rows: DashboardCandidateInput[] = candidates.map((c) => ({
@@ -95,7 +90,8 @@ export async function GET() {
       pollingStationName: c.pollingStation?.name ?? null,
     }));
 
-    const slotAgg = aggregateDashboardCandidates(rows, pollingStations);
+    const slotAgg = aggregateDashboardCandidates(rows, electoralAreas);
+    const errorCount = rows.filter((r) => !canonicalizeDelegatePosition(r.position)).length;
 
     const stats = {
       totalCandidates,
@@ -116,7 +112,9 @@ export async function GET() {
       contestedSlots: slotAgg.contestedSlots,
       vacantSlots: slotAgg.vacantSlots,
       canonicalLogicalSlots: slotAgg.canonicalLogicalSlots,
-      pollingStationsInRoll: slotAgg.pollingStationsInScope,
+      electoralAreasInRoll: slotAgg.electoralAreasInScope,
+      /** @deprecated Use electoralAreasInRoll */
+      pollingStationsInRoll: slotAgg.electoralAreasInScope,
       unopposedCount: slotAgg.unopposedSlots,
       contestedCount: slotAgg.contestedSlots,
       vacantCount: slotAgg.vacantSlots,

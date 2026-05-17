@@ -29,7 +29,14 @@ const createCandidateSchema = z.object({
     }),
   age: z.coerce.number().min(18).max(120).optional(),
   electoralAreaId: z.string().min(1, 'Electoral area is required'),
-  pollingStationCode: z.string().min(1, 'Polling station is required'),
+  pollingStationCode: z
+    .union([z.string(), z.null(), z.undefined()])
+    .optional()
+    .transform((v) => {
+      if (v == null || v === '') return null;
+      const t = String(v).trim();
+      return t === '' ? null : t;
+    }),
   position: z
     .string()
     .transform((v) => normalizePosition(v))
@@ -86,9 +93,8 @@ export async function GET(request: NextRequest) {
           hasErrors
             ? {
                 OR: [
-                  { pollingStationCode: null },
-                  { pollingStationCode: '' },
-                  { NOT: { pollingStationCode: { not: null } } },
+                  { position: '' },
+                  { position: { notIn: [...CANONICAL_DELEGATE_POSITIONS] } },
                 ],
               }
             : {},
@@ -127,13 +133,13 @@ export async function POST(request: NextRequest) {
       where: {
         phoneNumber: validated.phoneNumber,
         position: validated.position,
-        pollingStationCode: validated.pollingStationCode,
+        electoralAreaId: validated.electoralAreaId,
       },
     });
 
     if (duplicateAtSlot) {
       return NextResponse.json(
-        { error: 'This delegate has already applied for this position at this polling station.' },
+        { error: 'This delegate has already applied for this position in this electoral area.' },
         { status: 409 }
       );
     }
@@ -155,7 +161,10 @@ export async function POST(request: NextRequest) {
     }
 
     const candidate = await prisma.candidate.create({
-      data: validated,
+      data: {
+        ...validated,
+        pollingStationCode: validated.pollingStationCode ?? null,
+      },
       include: {
         electoralArea: true,
         pollingStation: true,

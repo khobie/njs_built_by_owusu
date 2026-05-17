@@ -1,5 +1,5 @@
 /**
- * Dashboard analytics keyed by polling_station_code + canonical position (7 fixed roles per station).
+ * Dashboard analytics keyed by electoral_area_id + canonical position (7 fixed roles per electoral area).
  */
 
 import {
@@ -25,18 +25,16 @@ export interface DashboardCandidateInput {
 
 export interface ContestHighlightRow {
   electoralAreaName: string;
-  pollingStationName: string;
-  pollingStationCode: string;
+  electoralAreaCode: string;
   position: string;
   candidateCount: number;
 }
 
 /** One row in electoral roll for slot reporting */
-export interface PollingStationBrief {
-  code: string;
+export interface ElectoralAreaBrief {
+  id: string;
   name: string;
-  electoralAreaId: string;
-  electoralAreaName: string;
+  code: string;
 }
 
 export type SlotState = 'vacant' | 'filled' | 'contested';
@@ -50,14 +48,15 @@ export interface DashboardAggregates {
   returnRatePct: number;
   verifiedCount: number;
   verificationRatePct: number;
-  /** Canonical station × position pairs with ≥2 delegates — ONE slot irrespective of candidate count */
+  /** Canonical electoral area × position pairs with ≥2 delegates */
   contestedSlots: number;
   /** Canonical pairs with exactly one delegate */
   unopposedSlots: number;
-  /** Canonical pairs with zero delegates (#stations × 7 − filled − contested slots that have ≥2) */
+  /** Canonical pairs with zero delegates */
   vacantSlots: number;
-  pollingStationsInScope: number;
-  /** Stations in scope × 7 positions */
+  /** Electoral areas included in the current filter scope */
+  electoralAreasInScope: number;
+  /** Areas in scope × 7 positions */
   canonicalLogicalSlots: number;
   newDelegateCount: number;
   oldDelegateCount: number;
@@ -66,20 +65,18 @@ export interface DashboardAggregates {
   verificationRejected: number;
   byElectoralArea: { areaName: string; count: number }[];
   contestHighlights: ContestHighlightRow[];
-  /** Counts grouped by Candidate.status — sums to totalDelegates */
+  /** Counts grouped by Candidate.status */
   byStatus: { label: string; count: number }[];
-  /** Counts grouped by Candidate.delegateType — sums to totalDelegates */
   byDelegateType: { label: string; count: number }[];
-  /** Counts grouped by Candidate.contestStatus — sums to totalDelegates */
   byContestStatus: { label: string; count: number }[];
   delegatesOnCanonicalSlotGrid: number;
   delegatesExcludedFromCanonicalGrid: number;
 }
 
-export interface StationSlotReportRow {
-  code: string;
+export interface ElectoralAreaSlotReportRow {
+  id: string;
   name: string;
-  electoralAreaName: string;
+  code: string;
   vacantOfSeven: number;
   contestedOfSeven: number;
   filledOfSeven: number;
@@ -94,6 +91,7 @@ function toSortedCounts(map: Map<string, number>): { label: string; count: numbe
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
+/** @deprecated Prefer electoral area slot keys; kept for rare call sites that still key by station code. */
 export function makeSlotKey(pollingStationCode: string | null | undefined, position: string | undefined): string | null {
   const code = (pollingStationCode ?? '').trim();
   if (!code) return null;
@@ -102,26 +100,37 @@ export function makeSlotKey(pollingStationCode: string | null | undefined, posit
   return `${code}${SLOT_SEP}${canonPos}`;
 }
 
-/** Build occupants map: `${code}|${canonicalPos}` → delegate rows */
-function buildCanonicalOccupancy(
+export function makeElectoralAreaSlotKey(
+  electoralAreaId: string | null | undefined,
+  position: string | undefined,
+): string | null {
+  const id = (electoralAreaId ?? '').trim();
+  if (!id) return null;
+  const canonPos = canonicalizeDelegatePosition(position ?? '');
+  if (!canonPos) return null;
+  return `${id}${SLOT_SEP}${canonPos}`;
+}
+
+/** Build occupants map: `${electoralAreaId}|${canonicalPos}` → delegate rows */
+function buildCanonicalOccupancyForElectoralAreas(
   rows: DashboardCandidateInput[],
-  stationCodesInScope: Set<string>,
+  areaIdsInScope: Set<string>,
 ): { occupancy: Map<string, DashboardCandidateInput[]>; delegatesExcludedFromCanonicalGrid: number } {
   const occupancy = new Map<string, DashboardCandidateInput[]>();
   let delegatesExcludedFromCanonicalGrid = 0;
 
   for (const r of rows) {
-    const code = (r.pollingStationCode ?? '').trim();
+    const areaId = (r.electoralAreaId ?? '').trim();
     const canonPos = canonicalizeDelegatePosition(r.position);
-    if (!code || !canonPos) {
+    if (!areaId || !canonPos) {
       delegatesExcludedFromCanonicalGrid += 1;
       continue;
     }
-    if (!stationCodesInScope.has(code)) {
+    if (!areaIdsInScope.has(areaId)) {
       delegatesExcludedFromCanonicalGrid += 1;
       continue;
     }
-    const key = `${code}${SLOT_SEP}${canonPos}`;
+    const key = `${areaId}${SLOT_SEP}${canonPos}`;
     const list = occupancy.get(key);
     if (list) list.push(r);
     else occupancy.set(key, [r]);
@@ -130,7 +139,7 @@ function buildCanonicalOccupancy(
   return { occupancy, delegatesExcludedFromCanonicalGrid };
 }
 
-/** Sum delegate rows occupying at least one canonical slot (same person counted once; contested stacks count everyone) */
+/** Sum delegate rows occupying at least one canonical slot */
 function countDelegatesOnGrid(occupancy: Map<string, DashboardCandidateInput[]>): number {
   let sum = 0;
   occupancy.forEach((list) => {
@@ -139,8 +148,8 @@ function countDelegatesOnGrid(occupancy: Map<string, DashboardCandidateInput[]>)
   return sum;
 }
 
-function computeCanonicalSlotRollup(
-  pollingStations: PollingStationBrief[],
+function computeElectoralAreaSlotRollup(
+  electoralAreas: ElectoralAreaBrief[],
   occupancy: Map<string, DashboardCandidateInput[]>,
 ): {
   contestedSlots: number;
@@ -153,20 +162,19 @@ function computeCanonicalSlotRollup(
   let unopposedSlots = 0;
   let vacantSlots = 0;
   const contestHighlights: ContestHighlightRow[] = [];
-  const canonicalLogicalSlots = pollingStations.length * CANONICAL_DELEGATE_POSITIONS.length;
+  const canonicalLogicalSlots = electoralAreas.length * CANONICAL_DELEGATE_POSITIONS.length;
 
-  for (const st of pollingStations) {
+  for (const area of electoralAreas) {
     for (const pos of CANONICAL_DELEGATE_POSITIONS) {
-      const key = `${st.code}${SLOT_SEP}${pos}`;
+      const key = `${area.id}${SLOT_SEP}${pos}`;
       const list = occupancy.get(key);
       const n = list?.length ?? 0;
       if (n > 1) {
         contestedSlots += 1;
         const sample = list![0];
         contestHighlights.push({
-          electoralAreaName: sample.electoralAreaName ?? st.electoralAreaName,
-          pollingStationName: st.name?.trim() ? st.name : (sample.pollingStationName ?? '—'),
-          pollingStationCode: st.code.trim(),
+          electoralAreaName: sample.electoralAreaName ?? area.name,
+          electoralAreaCode: area.code.trim(),
           position: pos,
           candidateCount: n,
         });
@@ -179,37 +187,38 @@ function computeCanonicalSlotRollup(
   }
 
   contestHighlights.sort(
-    (a, b) => b.candidateCount - a.candidateCount || a.pollingStationCode.localeCompare(b.pollingStationCode),
+    (a, b) => b.candidateCount - a.candidateCount || a.electoralAreaCode.localeCompare(b.electoralAreaCode),
   );
 
   return { contestedSlots, unopposedSlots, vacantSlots, canonicalLogicalSlots, contestHighlights };
 }
 
-export function buildStationCanonicalSlotReports(
+export function buildElectoralAreaCanonicalSlotReports(
   rows: DashboardCandidateInput[],
-  pollingStations: PollingStationBrief[],
+  electoralAreas: ElectoralAreaBrief[],
 ): {
   totals: {
     vacantSlots: number;
     contestedSlots: number;
     unopposedSlots: number;
     canonicalLogicalSlots: number;
-    pollingStationCount: number;
+    electoralAreaCount: number;
   };
-  stations: StationSlotReportRow[];
+  areas: ElectoralAreaSlotReportRow[];
 } {
-  const stationCodes = new Set(pollingStations.map((s) => s.code));
-  const { occupancy } = buildCanonicalOccupancy(rows, stationCodes);
-  const { contestedSlots, unopposedSlots, vacantSlots, canonicalLogicalSlots } = computeCanonicalSlotRollup(pollingStations, occupancy);
+  const areaIds = new Set(electoralAreas.map((a) => a.id));
+  const { occupancy } = buildCanonicalOccupancyForElectoralAreas(rows, areaIds);
+  const { contestedSlots, unopposedSlots, vacantSlots, canonicalLogicalSlots } =
+    computeElectoralAreaSlotRollup(electoralAreas, occupancy);
 
-  const stationsOut: StationSlotReportRow[] = pollingStations.map((st) => {
+  const areasOut: ElectoralAreaSlotReportRow[] = electoralAreas.map((area) => {
     let vacantOfSeven = 0;
     let contestedOfSeven = 0;
     let filledOfSeven = 0;
-    const slots: StationSlotReportRow['slots'] = [];
+    const slots: ElectoralAreaSlotReportRow['slots'] = [];
 
     for (const pos of CANONICAL_DELEGATE_POSITIONS) {
-      const key = `${st.code}${SLOT_SEP}${pos}`;
+      const key = `${area.id}${SLOT_SEP}${pos}`;
       const list = occupancy.get(key);
       const n = list?.length ?? 0;
       let slotState: SlotState = 'vacant';
@@ -226,9 +235,9 @@ export function buildStationCanonicalSlotReports(
     }
 
     return {
-      code: st.code,
-      name: st.name,
-      electoralAreaName: st.electoralAreaName,
+      id: area.id,
+      name: area.name,
+      code: area.code,
       vacantOfSeven,
       contestedOfSeven,
       filledOfSeven,
@@ -236,7 +245,7 @@ export function buildStationCanonicalSlotReports(
     };
   });
 
-  stationsOut.sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
+  areasOut.sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
 
   return {
     totals: {
@@ -244,15 +253,15 @@ export function buildStationCanonicalSlotReports(
       contestedSlots,
       unopposedSlots,
       canonicalLogicalSlots,
-      pollingStationCount: pollingStations.length,
+      electoralAreaCount: electoralAreas.length,
     },
-    stations: stationsOut,
+    areas: areasOut,
   };
 }
 
 export function aggregateDashboardCandidates(
   rows: DashboardCandidateInput[],
-  pollingStations: PollingStationBrief[],
+  electoralAreas: ElectoralAreaBrief[],
 ): DashboardAggregates {
   const totalDelegates = rows.length;
 
@@ -287,11 +296,11 @@ export function aggregateDashboardCandidates(
     contestStatusMap.set(cs, (contestStatusMap.get(cs) ?? 0) + 1);
   }
 
-  const stationCodes = new Set(pollingStations.map((s) => s.code));
-  const { occupancy, delegatesExcludedFromCanonicalGrid } = buildCanonicalOccupancy(rows, stationCodes);
+  const areaIds = new Set(electoralAreas.map((a) => a.id));
+  const { occupancy, delegatesExcludedFromCanonicalGrid } = buildCanonicalOccupancyForElectoralAreas(rows, areaIds);
   const delegatesOnCanonicalSlotGrid = countDelegatesOnGrid(occupancy);
   const { contestedSlots, unopposedSlots, vacantSlots, canonicalLogicalSlots, contestHighlights } =
-    computeCanonicalSlotRollup(pollingStations, occupancy);
+    computeElectoralAreaSlotRollup(electoralAreas, occupancy);
 
   const areaCounts = new Map<string, number>();
   for (const r of rows) {
@@ -314,7 +323,7 @@ export function aggregateDashboardCandidates(
     contestedSlots,
     unopposedSlots,
     vacantSlots,
-    pollingStationsInScope: pollingStations.length,
+    electoralAreasInScope: electoralAreas.length,
     canonicalLogicalSlots,
     newDelegateCount,
     oldDelegateCount,

@@ -1,6 +1,6 @@
 /**
- * Seven fixed delegate slots per polling station — one nominee per station × position.
- * Order preserved for dropdowns / station reports.
+ * Seven fixed delegate slots per electoral area — one nominee per area × position.
+ * Order preserved for dropdowns / area reports.
  */
 
 export const CANONICAL_DELEGATE_POSITIONS = [

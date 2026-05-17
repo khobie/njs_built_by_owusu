@@ -10,7 +10,7 @@ import { compareDelegatePositionCsvOrder, canonicalizeDelegatePosition } from '@
 
 interface ElectoralArea { id: string; name: string; code: string; }
 interface PollingStation { name: string; code: string; electoralAreaId: string; }
-interface CandidateReport { id: string; candidateId: string; authorName: string; reportType: string; content: string; createdAt: string; }
+interface CandidateReport { id: string; candidateId: string; authorName: string; reportType: string; content: string; isResolved?: boolean; createdAt: string; }
 interface VettingQuestionResponse { id: string; candidateId: string; questionKey: string; question: string; response: boolean; notes: string | null; verifiedBy: string; createdAt: string; }
 interface Candidate {
   id: string;
@@ -43,8 +43,6 @@ function VettingPageInner() {
   const [showSystemNav, setShowSystemNav] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [areas, setAreas] = useState<ElectoralArea[]>([]);
-  const [stations, setStations] = useState<PollingStation[]>([]);
-  const [allStations, setAllStations] = useState<PollingStation[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -54,8 +52,6 @@ function VettingPageInner() {
   // Filters
   const [filterArea, setFilterArea] = useState('');
   const [appliedFilterArea, setAppliedFilterArea] = useState('');
-  const [filterStation, setFilterStation] = useState('');
-  const [appliedFilterStation, setAppliedFilterStation] = useState('');
   const [filterPosition, setFilterPosition] = useState('');
   const [appliedFilterPosition, setAppliedFilterPosition] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -74,15 +70,13 @@ function VettingPageInner() {
   // Detail panel
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [correctionForm, setCorrectionForm] = useState({ electoralAreaId: '', pollingStationCode: '' });
+  const [correctionForm, setCorrectionForm] = useState({ electoralAreaId: '' });
   const [savingCorrection, setSavingCorrection] = useState(false);
   const [correctionError, setCorrectionError] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   
   // Edit form
   const [editForm, setEditForm] = useState<Record<string, string>>({});
-  const [editStations, setEditStations] = useState<PollingStation[]>([]);
-
   // Vetting questions
   const [vettingQuestions, setVettingQuestions] = useState<VettingQuestionResponse[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -141,7 +135,6 @@ function VettingPageInner() {
       const params = new URLSearchParams();
       if (appliedSearch) params.set('search', appliedSearch);
       if (appliedFilterArea) params.set('areaId', appliedFilterArea);
-      if (appliedFilterStation) params.set('stationCode', appliedFilterStation);
       if (appliedFilterPosition) params.set('position', appliedFilterPosition);
       if (appliedFilterStatus) params.set('status', appliedFilterStatus);
       if (appliedFilterContest) params.set('contestStatus', appliedFilterContest);
@@ -152,7 +145,7 @@ function VettingPageInner() {
       const data = await res.json();
       setCandidates(data);
     } catch (err) { console.error('Error:', err); }
-  }, [appliedSearch, appliedFilterArea, appliedFilterStation, appliedFilterPosition, appliedFilterStatus, appliedFilterContest, appliedFilterHasErrors]);
+  }, [appliedSearch, appliedFilterArea, appliedFilterPosition, appliedFilterStatus, appliedFilterContest, appliedFilterHasErrors]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -170,24 +163,6 @@ function VettingPageInner() {
     } catch (err) { console.error(err); }
   }, []);
 
-  const fetchAllStations = useCallback(async () => {
-    try {
-      const res = await fetch('/api/polling-stations');
-      if (!res.ok) throw new Error('Failed');
-      setAllStations(await res.json());
-    } catch (err) { console.error(err); }
-  }, []);
-
-  const fetchStations = useCallback(async (areaId: string) => {
-    try {
-      const res = await fetch(`/api/polling-stations?areaId=${areaId}`);
-      if (!res.ok) throw new Error('Failed');
-      const data = await res.json();
-      setStations(data);
-      setEditStations(data);
-    } catch (err) { console.error(err); }
-  }, []);
-
   const fetchVettingQuestions = useCallback(async (candidateId: string) => {
     try {
       const res = await fetch(`/api/candidates/${candidateId}/vetting`);
@@ -202,22 +177,18 @@ function VettingPageInner() {
   useEffect(() => {
     async function init() {
       setLoading(true);
-      await Promise.all([fetchCandidates(), fetchAreas(), fetchAllStations(), fetchStats()]);
+      await Promise.all([fetchCandidates(), fetchAreas(), fetchStats()]);
       setLoading(false);
     }
     init();
-  }, [fetchCandidates, fetchAreas, fetchAllStations, fetchStats]);
+  }, [fetchCandidates, fetchAreas, fetchStats]);
 
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
-
-  useEffect(() => {
-    if (filterArea) { fetchStations(filterArea); setFilterStation(''); } else { setStations([]); setFilterStation(''); }
-  }, [filterArea, fetchStations]);
 
   const openPanel = async (candidate: Candidate) => {
     setSelectedCandidate(candidate);
     setPanelOpen(true);
-    setCorrectionForm({ electoralAreaId: candidate.electoralAreaId, pollingStationCode: candidate.pollingStationCode || '' });
+    setCorrectionForm({ electoralAreaId: candidate.electoralAreaId });
     setRejectReason('');
     setEditForm({
       formNumber: candidate.formNumber,
@@ -228,12 +199,9 @@ function VettingPageInner() {
       age: candidate.age?.toString() || '',
       position: candidate.position,
       electoralAreaId: candidate.electoralAreaId,
-      pollingStationCode: candidate.pollingStationCode || '',
       delegateType: candidate.delegateType,
       comment: candidate.comment || '',
     });
-    fetchStations(candidate.electoralAreaId);
-    
     // Fetch vetting questions
     setLoadingQuestions(true);
     const questions = await fetchVettingQuestions(candidate.id);
@@ -313,8 +281,7 @@ function VettingPageInner() {
   };
 
   const handleCorrectionChange = (field: string, value: string) => {
-    setCorrectionForm(prev => ({ ...prev, [field]: value }));
-    if (field === 'electoralAreaId') setCorrectionForm(prev => ({ ...prev, pollingStationCode: '' }));
+    setCorrectionForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const saveCorrections = async () => {
@@ -325,7 +292,7 @@ function VettingPageInner() {
       const res = await fetch(`/api/candidates/${selectedCandidate.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ electoralAreaId: correctionForm.electoralAreaId, pollingStationCode: correctionForm.pollingStationCode || null }),
+        body: JSON.stringify({ electoralAreaId: correctionForm.electoralAreaId }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -345,18 +312,6 @@ function VettingPageInner() {
   };
 
   const getAreaName = (id: string) => areas.find(a => a.id === id)?.name || id;
-  const getStationName = (code: string | null) => { if (!code) return 'Not set'; return allStations.find(s => s.code === code)?.name || code; };
-
-  /** When browse + electoral area applied + "All stations", export one CSV with a section per polling station. */
-  const splitVettingExportByStation =
-    activeTab === 'browse' && Boolean(appliedFilterArea) && !appliedFilterStation;
-  const stationsInAppliedArea = splitVettingExportByStation
-    ? allStations.filter((s) => s.electoralAreaId === appliedFilterArea)
-    : [];
-  const canExportVettingCsv =
-    !loading &&
-    ((splitVettingExportByStation && stationsInAppliedArea.length > 0) ||
-      (!splitVettingExportByStation && candidates.length > 0));
 
   const exportVettingData = () => {
     const header = [
@@ -371,9 +326,23 @@ function VettingPageInner() {
       'Status',
       'Verification Status',
       'Contest Status',
+      'Red Flag',
+      'Rejected',
     ];
 
     const csvEscape = (value: string) => `"${String(value).replace(/"/g, '""')}"`;
+
+    const redFlagLabelForCsv = (c: Candidate): string => {
+      const reports = c.reports ?? [];
+      const red = reports.filter((r) => r.reportType === 'RED_FLAG');
+      if (red.length === 0) return 'NO';
+      const unresolved = red.filter((r) => !r.isResolved).length;
+      if (unresolved > 0) return `RED FLAG — ${unresolved} unresolved`;
+      return 'RED FLAG — all resolved';
+    };
+
+    const rejectedLabelForCsv = (c: Candidate): string =>
+      c.status === 'REJECTED' ? 'REJECTED' : 'NO';
 
     /** Human-readable Position cell: vacant vs non-canonical vs normal. */
     const positionLabelForCsv = (raw: string | null | undefined): string => {
@@ -397,6 +366,8 @@ function VettingPageInner() {
       status: string;
       verificationStatus: string;
       contestStatus: string;
+      redFlag: string;
+      rejected: string;
     };
 
     const rowsFromCandidates = (list: Candidate[]): RowObj[] =>
@@ -406,19 +377,19 @@ function VettingPageInner() {
           fullName: formatName(c),
           phoneNumber: c.phoneNumber,
           electoralArea: getAreaName(c.electoralAreaId),
-          pollingStationName: getStationName(c.pollingStationCode),
+          pollingStationName: c.pollingStation?.name || '',
           pollingStationCode: c.pollingStationCode || '',
           position: c.position,
           delegateType: c.delegateType,
           status: c.status,
           verificationStatus: c.verificationStatus,
           contestStatus: c.contestStatus,
+          redFlag: redFlagLabelForCsv(c),
+          rejected: rejectedLabelForCsv(c),
         }))
         .sort((a, b) => {
           const areaCompare = a.electoralArea.localeCompare(b.electoralArea);
           if (areaCompare !== 0) return areaCompare;
-          const stationCompare = a.pollingStationName.localeCompare(b.pollingStationName);
-          if (stationCompare !== 0) return stationCompare;
           const posCompare = compareDelegatePositionCsvOrder(a.position, b.position);
           if (posCompare !== 0) return posCompare;
           return a.fullName.localeCompare(b.fullName);
@@ -439,15 +410,13 @@ function VettingPageInner() {
           row.status,
           row.verificationStatus,
           row.contestStatus,
+          row.redFlag,
+          row.rejected,
         ]
           .map((value) => csvEscape(String(value ?? '')))
           .join(',')
       ),
     ];
-
-    /** One full-width label row (column A) + empty cells — groups stations on a single sheet. */
-    const sectionBannerRow = (label: string) =>
-      [csvEscape(label), ...Array(header.length - 1).fill('')].join(',');
 
     const downloadLines = (lines: string[], filename: string) => {
       const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -461,45 +430,7 @@ function VettingPageInner() {
       URL.revokeObjectURL(url);
     };
 
-    const sanitizeFilePart = (s: string) =>
-      s.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 72) || 'export';
-
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-
-    if (splitVettingExportByStation && stationsInAppliedArea.length > 0) {
-      const areaSlug = sanitizeFilePart(getAreaName(appliedFilterArea));
-      const stationsOrdered = [...stationsInAppliedArea].sort(
-        (a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code),
-      );
-      const out: string[] = [];
-      out.push(sectionBannerRow(`Electoral area: ${getAreaName(appliedFilterArea)}`));
-      out.push('');
-
-      const codes = new Set(stationsOrdered.map((s) => s.code));
-
-      for (const station of stationsOrdered) {
-        const subset = candidates.filter((c) => (c.pollingStationCode || '') === station.code);
-        const body = linesForRows(rowsFromCandidates(subset));
-        out.push(sectionBannerRow(`Polling station: ${station.name} — code ${station.code}`));
-        out.push(...body);
-        out.push('');
-      }
-
-      const other = candidates.filter(
-        (c) =>
-          c.electoralAreaId === appliedFilterArea &&
-          (!c.pollingStationCode || !codes.has(c.pollingStationCode)),
-      );
-      if (other.length > 0) {
-        const body = linesForRows(rowsFromCandidates(other));
-        out.push(sectionBannerRow('Other / unassigned polling station (in this area)'));
-        out.push(...body);
-        out.push('');
-      }
-
-      downloadLines(out, `vetting-${areaSlug}-by-polling-station-${stamp}.csv`);
-      return;
-    }
 
     const lines = linesForRows(rowsFromCandidates(candidates));
     downloadLines(lines, `vetting-export-${stamp}.csv`);
@@ -517,7 +448,8 @@ function VettingPageInner() {
   const allPositions = Array.from(new Set(candidates.map(c => c.position).filter(Boolean)));
 
   const rowsForDuplicates = activeTab === 'search' ? quickResults : candidates;
-  const isRowError = (candidate: Candidate) => !candidate.pollingStationCode || !candidate.electoralAreaId;
+  const isRowError = (candidate: Candidate) =>
+    !candidate.electoralAreaId || canonicalizeDelegatePosition(candidate.position) === null;
   const hasDuplicatePhone = (candidate: Candidate) =>
     rowsForDuplicates.filter((c) => c.phoneNumber === candidate.phoneNumber).length > 1;
 
@@ -577,7 +509,6 @@ function VettingPageInner() {
   const applyFilters = () => {
     setAppliedSearch(search.trim());
     setAppliedFilterArea(filterArea);
-    setAppliedFilterStation(filterStation);
     setAppliedFilterPosition(filterPosition);
     setAppliedFilterStatus(filterStatus);
     setAppliedFilterContest(filterContest);
@@ -587,7 +518,6 @@ function VettingPageInner() {
   const clearFilters = () => {
     setSearch('');
     setFilterArea('');
-    setFilterStation('');
     setFilterPosition('');
     setFilterStatus('');
     setFilterContest('');
@@ -595,7 +525,6 @@ function VettingPageInner() {
 
     setAppliedSearch('');
     setAppliedFilterArea('');
-    setAppliedFilterStation('');
     setAppliedFilterPosition('');
     setAppliedFilterStatus('');
     setAppliedFilterContest('');
@@ -692,17 +621,10 @@ function VettingPageInner() {
             <h2 className="section-title">Candidate Management</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span className="badge badge-pending">{candidates.length} records</span>
-              <button className="btn btn-secondary btn-sm" onClick={exportVettingData} disabled={!canExportVettingCsv}>
+              <button className="btn btn-secondary btn-sm" onClick={exportVettingData} disabled={loading || candidates.length === 0}>
                 Export CSV
               </button>
             </div>
-            {splitVettingExportByStation && stationsInAppliedArea.length > 0 ? (
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.35rem 0 0' }}>
-                With an electoral area selected and station left as &quot;All Stations&quot;, one spreadsheet file is
-                downloaded with a labeled block per polling station (name and code), then column headers and rows for
-                that station.
-              </p>
-            ) : null}
           </div>
 
           {/* Filters */}
@@ -714,12 +636,6 @@ function VettingPageInner() {
               <select className="select" value={filterArea} onChange={(e) => setFilterArea(e.target.value)}>
                 <option value="">All Areas</option>
                 {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </div>
-            <div className="filter-group">
-              <select className="select" value={filterStation} onChange={(e) => setFilterStation(e.target.value)} disabled={!filterArea}>
-                <option value="">{filterArea ? 'All Stations' : 'Select Area First'}</option>
-                {stations.map(s => <option key={s.code} value={s.code}>{s.code}</option>)}
               </select>
             </div>
             <div className="filter-group">
@@ -801,7 +717,7 @@ function VettingPageInner() {
 
                   {(isRowError(c) || hasDuplicatePhone(c)) && (
                     <div style={{ fontSize: '0.75rem', marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      {isRowError(c) && <div className="warning-item error">⚠ Missing station/area</div>}
+                      {isRowError(c) && <div className="warning-item error">⚠ Missing electoral area or invalid role</div>}
                       {hasDuplicatePhone(c) && <div className="warning-item duplicate">⚠ Duplicate phone</div>}
                     </div>
                   )}
@@ -888,7 +804,7 @@ function VettingPageInner() {
 
                   {(isRowError(c) || hasDuplicatePhone(c)) && (
                     <div style={{ fontSize: '0.75rem', marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      {isRowError(c) && <div className="warning-item error">⚠ Missing station/area</div>}
+                      {isRowError(c) && <div className="warning-item error">⚠ Missing electoral area or invalid role</div>}
                       {hasDuplicatePhone(c) && <div className="warning-item duplicate">⚠ Duplicate phone</div>}
                     </div>
                   )}
@@ -1088,7 +1004,7 @@ function VettingPageInner() {
                   ✏️ Data Correction
                 </h3>
                 {correctionError && <div className="error" style={{ marginBottom: '1rem' }}>{correctionError}</div>}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ marginBottom: '1rem' }}>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>Electoral Area</label>
                     <select
@@ -1100,25 +1016,14 @@ function VettingPageInner() {
                       {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
                   </div>
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>Polling Station</label>
-                    <select
-                      className="select"
-                      value={correctionForm.pollingStationCode}
-                      onChange={(e) => handleCorrectionChange('pollingStationCode', e.target.value)}
-                      disabled={!correctionForm.electoralAreaId}
-                    >
-                      <option value="">Select station...</option>
-                      {correctionForm.electoralAreaId && stations.map(s => (
-                        <option key={s.code} value={s.code}>{s.code} - {s.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.75rem' }}>
+                    Delegates are tracked per electoral area and canonical role. Polling stations are optional legacy metadata.
+                  </p>
                 </div>
                 <button
                   className="btn btn-primary"
                   onClick={saveCorrections}
-                  disabled={savingCorrection || !correctionForm.electoralAreaId || !correctionForm.pollingStationCode}
+                  disabled={savingCorrection || !correctionForm.electoralAreaId}
                 >
                   {savingCorrection ? '⏳ Saving...' : '💾 Save Changes'}
                 </button>
@@ -1148,7 +1053,7 @@ function VettingPageInner() {
                     <button
                       className="btn btn-success"
                       onClick={() => handleAction(selectedCandidate.id, 'verify')}
-                      disabled={savingId === selectedCandidate.id || !selectedCandidate.pollingStationCode}
+                      disabled={savingId === selectedCandidate.id || !selectedCandidate.electoralAreaId}
                     >
                       ✓ Verify Candidate
                     </button>

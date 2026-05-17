@@ -5,7 +5,7 @@ import { hasSystemWideAccess } from '@/lib/roles';
 import {
   aggregateDashboardCandidates,
   type DashboardCandidateInput,
-  type PollingStationBrief,
+  type ElectoralAreaBrief,
 } from '@/lib/dashboard-aggregates';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       ],
     };
 
-    const [candidates, pollingStationsRaw] = await Promise.all([
+    const [candidates, electoralAreasRaw] = await Promise.all([
       prisma.candidate.findMany({
         where: candidateWhere,
         select: {
@@ -47,14 +47,13 @@ export async function GET(request: NextRequest) {
           pollingStation: { select: { name: true, code: true } },
         },
       }),
-      prisma.pollingStation.findMany({
-        where: electoralAreaId ? { electoralAreaId } : undefined,
-        orderBy: [{ electoralAreaId: 'asc' }, { name: 'asc' }],
+      prisma.electoralArea.findMany({
+        where: electoralAreaId ? { id: electoralAreaId } : undefined,
+        orderBy: [{ name: 'asc' }, { code: 'asc' }],
         select: {
-          code: true,
+          id: true,
           name: true,
-          electoralAreaId: true,
-          electoralArea: { select: { name: true } },
+          code: true,
         },
       }),
     ]);
@@ -72,14 +71,13 @@ export async function GET(request: NextRequest) {
       pollingStationName: c.pollingStation?.name ?? null,
     }));
 
-    const pollingStations: PollingStationBrief[] = pollingStationsRaw.map((s) => ({
-      code: s.code,
-      name: s.name,
-      electoralAreaId: s.electoralAreaId,
-      electoralAreaName: s.electoralArea.name,
+    const electoralAreas: ElectoralAreaBrief[] = electoralAreasRaw.map((a) => ({
+      id: a.id,
+      name: a.name,
+      code: a.code,
     }));
 
-    const aggregates = aggregateDashboardCandidates(rows, pollingStations);
+    const aggregates = aggregateDashboardCandidates(rows, electoralAreas);
 
     return NextResponse.json({
       updatedAt: new Date().toISOString(),

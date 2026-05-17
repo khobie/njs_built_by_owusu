@@ -168,21 +168,21 @@ export default function DashboardPage() {
       {
         label: 'Contested seats',
         value: agg.contestedSlots.toLocaleString(),
-        hint: `${CANONICAL_POSITION_COUNT} canonical roles per station; each disputed seat counted once (${agg.delegatesExcludedFromCanonicalGrid > 0 ? `${agg.delegatesExcludedFromCanonicalGrid} delegate rows not mapped to the grid — wrong/missing station or non-canonical role` : 'every row maps to grid or anomaly count is 0'})`,
+        hint: `${CANONICAL_POSITION_COUNT} canonical roles per electoral area; each disputed seat counted once (${agg.delegatesExcludedFromCanonicalGrid > 0 ? `${agg.delegatesExcludedFromCanonicalGrid} delegate rows not mapped to the grid — wrong/missing area or non-canonical role` : 'every row maps to grid or anomaly count is 0'})`,
         from: '#ef4444',
         to: '#dc2626',
       },
       {
         label: 'Filled seats',
         value: agg.unopposedSlots.toLocaleString(),
-        hint: `Exactly one accredited delegate occupying that seat (same ${CANONICAL_POSITION_COUNT}-role grid × ${agg.pollingStationsInScope.toLocaleString()} stations).`,
+        hint: `Exactly one accredited delegate occupying that seat (same ${CANONICAL_POSITION_COUNT}-role grid × ${agg.electoralAreasInScope.toLocaleString()} electoral areas).`,
         from: '#3b82f6',
         to: '#2563eb',
       },
       {
         label: 'Vacant seats',
         value: agg.vacantSlots.toLocaleString(),
-        hint: `${agg.canonicalLogicalSlots.toLocaleString()} total seats (${CANONICAL_POSITION_COUNT} roles × ${agg.pollingStationsInScope.toLocaleString()} polling stations in this view) with no delegate.`,
+        hint: `${agg.canonicalLogicalSlots.toLocaleString()} total seats (${CANONICAL_POSITION_COUNT} roles × ${agg.electoralAreasInScope.toLocaleString()} electoral areas in this view) with no delegate.`,
         from: '#cbd5e1',
         to: '#94a3b8',
       },
@@ -297,7 +297,7 @@ export default function DashboardPage() {
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
             <Link href="/polling-stations" className="btn btn-secondary btn-sm">
-              Polling stations
+              Electoral areas
             </Link>
             <Link href="/edit-candidate" className="btn btn-secondary btn-sm">
               Edit candidate
@@ -498,20 +498,20 @@ export default function DashboardPage() {
                     lineHeight: 1.6,
                   }}
                 >
-                  <strong style={{ color: 'var(--text-primary)' }}>Seven roles per polling station:</strong>{' '}
+                  <strong style={{ color: 'var(--text-primary)' }}>Seven roles per electoral area:</strong>{' '}
                   CHAIRMAN, SECRETARY, ORGANIZER, WOMEN ORGANIZER, YOUTH ORGANIZER, COMMUNICATION OFFICER, ELECTORAL
                   AFFAIRS OFFICER. Each contested seat counts once. Grid uses{' '}
                   {agg.canonicalLogicalSlots.toLocaleString()} seats ({CANONICAL_POSITION_COUNT} ×{' '}
-                  {agg.pollingStationsInScope.toLocaleString()} stations). Delegate rows counted on-grid:{' '}
-                  {agg.delegatesOnCanonicalSlotGrid.toLocaleString()}; excluded (missing code / unknown station /
+                  {agg.electoralAreasInScope.toLocaleString()} areas). Delegate rows counted on-grid:{' '}
+                  {agg.delegatesOnCanonicalSlotGrid.toLocaleString()}; excluded (missing area /
                   non-canonical role): {agg.delegatesExcludedFromCanonicalGrid.toLocaleString()}.
 
                   <div style={{ marginTop: '0.5rem' }}>
                     Open{' '}
                     <Link href="/polling-stations" style={{ fontWeight: 600 }}>
-                      Polling stations &amp; slots
+                      Electoral areas &amp; slots
                     </Link>{' '}
-                    for vacancy per station.
+                    for vacancy per area.
                   </div>
                   <div style={{ marginTop: '0.5rem' }}>
                     Verification donut parts sum to delegates: Verified {agg.verificationVerified}, pending{' '}
@@ -546,33 +546,29 @@ export default function DashboardPage() {
 
             <section className="section">
               <div className="section-header">
-                <h2 className="section-title">Polling stations — contested seats only</h2>
+                <h2 className="section-title">Electoral areas — contested seats only</h2>
                 <span className="badge badge-contested">{agg.contestHighlights.length} contested slots</span>
               </div>
               {agg.contestHighlights.length === 0 ? (
                 <p className="empty-state" style={{ padding: '2rem' }}>
-                  No contested seats in this filtered view — no polling station has more than one delegate in the same canonical role.
+                  No contested seats in this filtered view — no electoral area has more than one delegate in the same canonical role.
                 </p>
               ) : (
                 <div className="table-container">
                   <table>
                     <thead>
                       <tr>
+                        <th>Area code</th>
                         <th>Electoral area</th>
-                        <th>Polling station name</th>
-                        <th>Polling station code</th>
                         <th>Position</th>
                         <th>Candidates</th>
                       </tr>
                     </thead>
                     <tbody>
                       {agg.contestHighlights.map((row) => (
-                        <tr key={`${row.pollingStationCode}-${row.position}`}>
+                        <tr key={`${row.electoralAreaCode}-${row.position}`}>
+                          <td>{row.electoralAreaCode}</td>
                           <td>{row.electoralAreaName}</td>
-                          <td>{row.pollingStationName}</td>
-                          <td>
-                            <strong>{row.pollingStationCode}</strong>
-                          </td>
                           <td>{row.position}</td>
                           <td>{row.candidateCount}</td>
                         </tr>

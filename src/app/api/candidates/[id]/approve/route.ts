@@ -38,14 +38,6 @@ export async function POST(
       }
     }
 
-    // Validation checks before approval
-    if (!candidate.pollingStationCode) {
-      return NextResponse.json(
-        { error: 'Cannot approve: Polling station is not assigned' },
-        { status: 400 }
-      );
-    }
-
     if (!candidate.electoralAreaId) {
       return NextResponse.json(
         { error: 'Cannot approve: Electoral area is not assigned' },
@@ -77,8 +69,7 @@ export async function POST(
       },
     });
 
-    // Recalculate contest status by strict slot key: polling_station_code + position
-    await recalculateContestStatusForGroup(candidate.pollingStationCode, candidate.position);
+    await recalculateContestStatusForGroup(candidate.electoralAreaId, candidate.position);
 
     return NextResponse.json(approved);
   } catch (error) {

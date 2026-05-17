@@ -3,9 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
 import { hasSystemWideAccess } from '@/lib/roles';
 import {
-  buildStationCanonicalSlotReports,
+  buildElectoralAreaCanonicalSlotReports,
   type DashboardCandidateInput,
-  type PollingStationBrief,
+  type ElectoralAreaBrief,
 } from '@/lib/dashboard-aggregates';
 import { CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
 
@@ -21,15 +21,14 @@ export async function GET(request: NextRequest) {
     const electoralAreaId = searchParams.get('electoralAreaId') || '';
     const delegateType = searchParams.get('delegateType') || '';
 
-    const [pollingStationsRaw, candidates] = await Promise.all([
-      prisma.pollingStation.findMany({
-        where: electoralAreaId ? { electoralAreaId } : undefined,
-        orderBy: [{ electoralAreaId: 'asc' }, { name: 'asc' }],
+    const [electoralAreasRaw, candidates] = await Promise.all([
+      prisma.electoralArea.findMany({
+        where: electoralAreaId ? { id: electoralAreaId } : undefined,
+        orderBy: [{ name: 'asc' }, { code: 'asc' }],
         select: {
-          code: true,
+          id: true,
           name: true,
-          electoralAreaId: true,
-          electoralArea: { select: { name: true } },
+          code: true,
         },
       }),
       prisma.candidate.findMany({
@@ -54,11 +53,10 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const pollingStations: PollingStationBrief[] = pollingStationsRaw.map((s) => ({
-      code: s.code,
-      name: s.name,
-      electoralAreaId: s.electoralAreaId,
-      electoralAreaName: s.electoralArea.name,
+    const electoralAreas: ElectoralAreaBrief[] = electoralAreasRaw.map((a) => ({
+      id: a.id,
+      name: a.name,
+      code: a.code,
     }));
 
     const rows: DashboardCandidateInput[] = candidates.map((c) => ({
@@ -74,7 +72,7 @@ export async function GET(request: NextRequest) {
       pollingStationName: c.pollingStation?.name ?? null,
     }));
 
-    const reports = buildStationCanonicalSlotReports(rows, pollingStations);
+    const reports = buildElectoralAreaCanonicalSlotReports(rows, electoralAreas);
 
     return NextResponse.json({
       positions: [...CANONICAL_DELEGATE_POSITIONS],
@@ -83,7 +81,9 @@ export async function GET(request: NextRequest) {
         delegateType: delegateType === 'NEW' || delegateType === 'OLD' ? delegateType : null,
       },
       totals: reports.totals,
-      stations: reports.stations,
+      areas: reports.areas,
+      /** @deprecated Use `areas` — same data; kept for older clients */
+      stations: reports.areas,
       candidateRecordsInView: candidates.length,
     });
   } catch (error) {
