@@ -5,6 +5,7 @@ import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
 import { canIssueForms } from '@/lib/roles';
 import { CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
 import { FORM_NUMBER_MAX_LENGTH } from '@/lib/form-number';
+import { nominationSlotWhere, normalizePollingStationCode } from '@/lib/nomination-slot';
 
 function normalizeGhanaPhone(raw: string): string {
   const digits = raw.replace(/[^\d]/g, '');
@@ -141,33 +142,34 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createCandidateSchema.parse(body);
 
+    const station = normalizePollingStationCode(validated.pollingStationCode);
+
     const duplicateAtSlot = await prisma.candidate.findFirst({
-      where: {
+      where: nominationSlotWhere({
         phoneNumber: validated.phoneNumber,
-        position: validated.position,
         electoralAreaId: validated.electoralAreaId,
-      },
+        position: validated.position,
+        pollingStationCode: station,
+      }),
     });
 
     if (duplicateAtSlot) {
       return NextResponse.json(
-        { error: 'This delegate has already applied for this position in this electoral area.' },
+        {
+          error:
+            'This delegate already has an application for this position in this electoral area for this polling station. If no station was set, only one such application is allowed per area—or pick a different station, area, or role.',
+        },
         { status: 409 }
       );
     }
 
     const existing = await prisma.candidate.findFirst({
-      where: {
-        OR: [
-          { formNumber: validated.formNumber },
-          { phoneNumber: validated.phoneNumber },
-        ],
-      },
+      where: { formNumber: validated.formNumber },
     });
 
     if (existing) {
       return NextResponse.json(
-        { error: 'Candidate with this form number or phone number already exists' },
+        { error: 'Another candidate already uses this form number.' },
         { status: 409 }
       );
     }
@@ -175,7 +177,7 @@ export async function POST(request: NextRequest) {
     const candidate = await prisma.candidate.create({
       data: {
         ...validated,
-        pollingStationCode: validated.pollingStationCode ?? null,
+        pollingStationCode: station,
       },
       include: {
         electoralArea: true,

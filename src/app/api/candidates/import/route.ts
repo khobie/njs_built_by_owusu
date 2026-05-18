@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
 import { canIssueForms } from '@/lib/roles';
 import { FORM_NUMBER_MAX_LENGTH } from '@/lib/form-number';
+import { nominationSlotWhere, normalizePollingStationCode } from '@/lib/nomination-slot';
 
 interface ImportCandidate {
   formNumber?: string;
@@ -132,17 +133,6 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Check for duplicates by phone
-        const existing = await prisma.candidate.findFirst({
-          where: { phoneNumber: phone },
-        });
-
-        if (existing) {
-          results.skipped++;
-          results.errors.push(`Row ${i + 1}: Skipped - Duplicate phone number ${phone} for ${surname} ${firstName}`);
-          continue;
-        }
-
         // Look up electoral area by name
         let electoralAreaId = candidate.electoralAreaId;
         if (!electoralAreaId && electoralAreaName) {
@@ -159,6 +149,25 @@ export async function POST(request: NextRequest) {
         let pollingStationCode: string | undefined = candidate.pollingStationCode;
         if (!pollingStationCode && stationName) {
           pollingStationCode = stationNameMap.get(stationName.toUpperCase());
+        }
+
+        const station = normalizePollingStationCode(pollingStationCode);
+
+        const duplicateSlot = await prisma.candidate.findFirst({
+          where: nominationSlotWhere({
+            phoneNumber: phone,
+            electoralAreaId,
+            position: position || 'UNKNOWN',
+            pollingStationCode: station,
+          }),
+        });
+
+        if (duplicateSlot) {
+          results.skipped++;
+          results.errors.push(
+            `Row ${i + 1}: Skipped - Same phone already registered for this position in this electoral area${station ? ' and polling station' : ''} (${surname} ${firstName})`
+          );
+          continue;
         }
 
         let formNumber = pickImportFormNumber(candidate);
@@ -197,7 +206,7 @@ export async function POST(request: NextRequest) {
             phoneNumber: phone,
             age,
             electoralAreaId,
-            pollingStationCode: pollingStationCode || null,
+            pollingStationCode: station,
             position: position || 'UNKNOWN',
             delegateType,
             comment,

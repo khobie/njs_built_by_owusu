@@ -276,21 +276,35 @@ JULIET\tKONADU\t\t249991411\t68\tTWO STREAMS\tMETHODIST CHAPEL\tWOMEN ORGANIZER\
         <div className="section">
           <div className="section-header">
             <h2 className="section-title">Upload File</h2>
-            <button
-              type="button"
-              onClick={downloadTemplate}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#1E40AF',
-                fontSize: '0.875rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                textDecoration: 'underline',
-              }}
-            >
-              ⬇ Download Template
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <a
+                href="/api/electoral-areas?format=csv"
+                download
+                style={{
+                  color: '#1E40AF',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  textDecoration: 'underline',
+                }}
+              >
+                ⬇ Electoral areas (CSV)
+              </a>
+              <button
+                type="button"
+                onClick={downloadTemplate}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#1E40AF',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                ⬇ Download Template
+              </button>
+            </div>
           </div>
 
           <div

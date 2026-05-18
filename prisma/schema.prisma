@@ -38,7 +38,7 @@ model Candidate {
   surname            String
   firstName          String
   middleName         String?
-  phoneNumber        String            @unique
+  phoneNumber        String
   age                Int?
   electoralAreaId    String
   electoralArea      ElectoralArea     @relation(fields: [electoralAreaId], references: [id])
@@ -55,6 +55,7 @@ model Candidate {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
+  @@index([phoneNumber])
   @@map("candidates")
 }
 

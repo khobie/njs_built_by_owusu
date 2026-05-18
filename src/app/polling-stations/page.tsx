@@ -153,6 +153,13 @@ export default function ElectoralAreasSlotsPage() {
 
 
           <div className="dashboard-meta">
+            <a
+              href="/api/electoral-areas?format=csv"
+              className="btn btn-secondary btn-sm"
+              download
+            >
+              Export areas (CSV)
+            </a>
             <Link href="/" className="btn btn-secondary btn-sm">
               Dashboard
             </Link>

@@ -6,6 +6,7 @@ import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
 import { canVet } from '@/lib/roles';
 import { CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
 import { FORM_NUMBER_MAX_LENGTH } from '@/lib/form-number';
+import { nominationSlotWhere } from '@/lib/nomination-slot';
 
 function normalizeGhanaPhone(raw: string): string {
   const digits = raw.replace(/[^\d]/g, '');
@@ -117,14 +118,6 @@ export async function PATCH(
           { status: 400 }
         );
       }
-      if (phone !== existing.phoneNumber) {
-        const dupe = await prisma.candidate.findFirst({
-          where: { phoneNumber: phone, NOT: { id } },
-        });
-        if (dupe) {
-          return NextResponse.json({ error: 'Another candidate already uses this phone number.' }, { status: 409 });
-        }
-      }
       updateData.phoneNumber = phone;
     }
     if (body.age !== undefined) {
@@ -188,6 +181,32 @@ export async function PATCH(
       if (!check.ok) {
         return NextResponse.json({ error: check.message }, { status: 400 });
       }
+    }
+
+    const nextPhone =
+      typeof updateData.phoneNumber === 'string' ? updateData.phoneNumber : existing.phoneNumber;
+    const nextPosition =
+      typeof updateData.position === 'string' ? updateData.position : existing.position;
+
+    const slotDupe = await prisma.candidate.findFirst({
+      where: {
+        ...nominationSlotWhere({
+          phoneNumber: nextPhone,
+          electoralAreaId: nextAreaId,
+          position: nextPosition,
+          pollingStationCode: nextCode,
+        }),
+        NOT: { id },
+      },
+    });
+    if (slotDupe) {
+      return NextResponse.json(
+        {
+          error:
+            'Another record already uses this phone number for the same position, electoral area, and polling station (or the same electoral area with no station set).',
+        },
+        { status: 409 }
+      );
     }
 
     const candidate = await prisma.candidate.update({
