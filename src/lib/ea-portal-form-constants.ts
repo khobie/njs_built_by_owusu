@@ -1,14 +1,12 @@
 /** EA portal form issuing — positions (separate from delegate nomination roles). */
 export const EA_PORTAL_FORM_POSITIONS = [
-  'Electoral Area Chairman',
-  'Secretary',
-  'Organizer',
-  'Women Organizer',
-  'Youth Organizer',
-  'Treasurer',
-  'Communications Officer',
-  'NASARA Coordinator',
-  'Other',
+  'CHAIRMAN',
+  'SECRETARY',
+  'ORGANIZER',
+  'WOMAN ORGANIZER',
+  'YOUTH ORGANIZER',
+  'COMMUNICATION OFFICER',
+  'ELECTORAL AFFAIRS OFFICER',
 ] as const;
 
 export type EaPortalFormPosition = (typeof EA_PORTAL_FORM_POSITIONS)[number];
