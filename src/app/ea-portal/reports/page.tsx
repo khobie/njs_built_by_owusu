@@ -34,6 +34,78 @@ export default function EaPortalReportsPage() {
           </p>
         </div>
       </div>
+
+      <div className="ea-portal-panel">
+        <div className="ea-portal-panel-header">
+          <h2>EA form issuing reports</h2>
+        </div>
+        <p style={{ fontSize: '0.9rem', color: 'var(--gray-600)', margin: '0 0 0.75rem' }}>
+          Summary includes forms per area and contested positions. Detailed view lists every issued form in your scope.
+        </p>
+        <div className="ea-portal-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-500)' }}>Summary</span>
+          <a
+            className="btn btn-primary"
+            style={{ display: 'inline-block', maxWidth: '320px', textAlign: 'center' }}
+            href="/api/ea-portal/forms/reports/export?view=summary&format=csv"
+            download={`ea_forms_summary_${stamp}.csv`}
+          >
+            Summary CSV
+          </a>
+          <a
+            className="btn btn-secondary"
+            style={{ display: 'inline-block', maxWidth: '320px', textAlign: 'center' }}
+            href={`/api/ea-portal/forms/reports/export?view=summary&format=xls`}
+            download={`ea_forms_summary_${stamp}.xls`}
+          >
+            Summary Excel (.xls)
+          </a>
+          <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-500)', marginTop: '0.35rem' }}>Detailed</span>
+          <a
+            className="btn btn-secondary"
+            style={{ display: 'inline-block', maxWidth: '320px', textAlign: 'center' }}
+            href={`/api/ea-portal/forms/reports/export?view=detail&format=csv`}
+            download={`ea_forms_detail_${stamp}.csv`}
+          >
+            Detailed CSV
+          </a>
+          <a
+            className="btn btn-secondary"
+            style={{ display: 'inline-block', maxWidth: '320px', textAlign: 'center' }}
+            href={`/api/ea-portal/forms/reports/export?view=detail&format=xls`}
+            download={`ea_forms_detail_${stamp}.xls`}
+          >
+            Detailed Excel (.xls)
+          </a>
+          <a
+            className="btn btn-secondary"
+            style={{ display: 'inline-block', maxWidth: '320px', textAlign: 'center' }}
+            href="/api/ea-portal/forms/reports/export?view=detail&format=pdf"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Detailed print / PDF
+          </a>
+          <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-500)', marginTop: '0.35rem' }}>Contests only</span>
+          <a
+            className="btn btn-secondary"
+            style={{ display: 'inline-block', maxWidth: '320px', textAlign: 'center' }}
+            href={`/api/ea-portal/forms/reports/export?view=detail&contestsOnly=1&format=csv`}
+            download={`ea_forms_contests_${stamp}.csv`}
+          >
+            Contested rows CSV
+          </a>
+          <a
+            className="btn btn-secondary"
+            style={{ display: 'inline-block', maxWidth: '320px', textAlign: 'center' }}
+            href={`/api/ea-portal/forms/reports/export?view=detail&contestsOnly=1&format=pdf`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Contested print / PDF
+          </a>
+        </div>
+      </div>
     </>
   );
 }

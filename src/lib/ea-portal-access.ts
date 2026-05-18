@@ -56,6 +56,12 @@ export function recordsVisibleWhere(scope: string[] | null): Prisma.EaPortalReco
   };
 }
 
+/** Issued EA forms: always tied to a portal area; officers only see their areas. */
+export function formsVisibleWhere(scope: string[] | null): Prisma.EaPortalIssuedFormWhereInput {
+  if (scope === null) return {};
+  return { electoralAreaId: { in: scope } };
+}
+
 export async function logEaPortalActivity(args: {
   action: string;
   details?: string;

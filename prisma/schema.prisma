@@ -101,8 +101,9 @@ model User {
   updatedAt     DateTime @updatedAt
 
   // Relations
-  electoralAreas UserElectoralArea[]
-  eaPortalAreas  UserEaPortalArea[]
+  electoralAreas     UserElectoralArea[]
+  eaPortalAreas      UserEaPortalArea[]
+  eaPortalIssuedForms EaPortalIssuedForm[]
 
   @@map("users")
 }
@@ -119,9 +120,10 @@ model EaPortalArea {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  records    EaPortalRecord[]
-  userLinks  UserEaPortalArea[]
-  activities EaPortalActivity[]
+  records     EaPortalRecord[]
+  userLinks   UserEaPortalArea[]
+  activities  EaPortalActivity[]
+  issuedForms EaPortalIssuedForm[]
 
   @@unique([name, constituency, district, region])
   @@index([delegateAreaCode])
@@ -148,6 +150,37 @@ model EaPortalRecord {
   @@index([role])
   @@index([createdAt])
   @@map("ea_portal_records")
+}
+
+/// Electoral Area **portal** form issuing — separate from delegate `Candidate` / nomination forms.
+model EaPortalIssuedForm {
+  id                   String       @id @default(cuid())
+  fullName             String
+  /// Normalized (whitespace stripped) for consistent duplicate detection.
+  phone                String
+  gender               String?
+  address              String?
+  electoralAreaId      String
+  electoralArea        EaPortalArea @relation(fields: [electoralAreaId], references: [id], onDelete: Restrict)
+  pollingStationCode   String?
+  pollingStationName   String?
+  position             String
+  formNumber           String       @unique
+  applicantType        String
+  status               String       @default("PENDING")
+  issuedByUserId       String
+  issuedBy             User         @relation(fields: [issuedByUserId], references: [id], onDelete: Restrict)
+  issuedAt             DateTime     @default(now())
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  @@unique([electoralAreaId, position, phone])
+  @@index([electoralAreaId])
+  @@index([position])
+  @@index([status])
+  @@index([applicantType])
+  @@index([issuedAt])
+  @@map("ea_portal_issued_forms")
 }
 
 model UserEaPortalArea {

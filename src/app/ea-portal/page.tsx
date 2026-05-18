@@ -5,8 +5,28 @@ import Link from 'next/link';
 import { EA_PORTAL_REFRESH_EVENT } from '@/lib/ea-portal-refresh';
 
 type Dashboard = {
-  totals: { electoralAreas: number; records: number; unassignedRecords: number };
+  totals: {
+    electoralAreas: number;
+    records: number;
+    unassignedRecords: number;
+    formsIssued: number;
+    formsPending: number;
+    formsVerified: number;
+    formsRejected: number;
+    formContestPositions: number;
+    formUnopposedPositions: number;
+  };
   recordsPerArea: { areaId: string; areaName: string; region: string; count: number }[];
+  formsPerArea: { areaId: string; areaName: string; region: string; count: number }[];
+  recentForms: {
+    id: string;
+    fullName: string;
+    position: string;
+    formNumber: string;
+    status: string;
+    issuedAt: string;
+    electoralArea: { id: string; name: string } | null;
+  }[];
   recentRecords: {
     id: string;
     fullName: string;
@@ -53,7 +73,15 @@ export default function EaPortalDashboardPage() {
     <>
       <header className="ea-portal-header">
         <h1>Electoral Area Portal</h1>
-        <p>Executive records, assignments, and area structure — separate from the delegate nomination database.</p>
+        <p>
+          Executive records, form issuing, assignments, and area structure — separate from the delegate nomination
+          database.
+        </p>
+        <div style={{ marginTop: '0.75rem' }}>
+          <Link href="/electoral-area/forms" className="btn btn-primary btn-sm">
+            Open form issuing
+          </Link>
+        </div>
       </header>
 
       {err ? <div className="error">{err}</div> : null}
@@ -74,6 +102,103 @@ export default function EaPortalDashboardPage() {
               <div className="value" style={{ color: 'var(--warning)' }}>
                 {data.totals.unassignedRecords}
               </div>
+            </div>
+            <div className="ea-portal-card">
+              <h3>EA forms issued</h3>
+              <div className="value">{data.totals.formsIssued}</div>
+            </div>
+            <div className="ea-portal-card">
+              <h3>Pending forms</h3>
+              <div className="value">{data.totals.formsPending}</div>
+            </div>
+            <div className="ea-portal-card">
+              <h3>Verified</h3>
+              <div className="value" style={{ color: '#15803d' }}>
+                {data.totals.formsVerified}
+              </div>
+            </div>
+            <div className="ea-portal-card">
+              <h3>Rejected</h3>
+              <div className="value" style={{ color: '#b91c1c' }}>
+                {data.totals.formsRejected}
+              </div>
+            </div>
+            <div className="ea-portal-card">
+              <h3>Contest positions</h3>
+              <div className="value">{data.totals.formContestPositions}</div>
+              <p style={{ fontSize: '0.7rem', color: 'var(--gray-500)', margin: '0.35rem 0 0' }}>
+                Area + position with &gt;1 applicant
+              </p>
+            </div>
+            <div className="ea-portal-card">
+              <h3>Unopposed positions</h3>
+              <div className="value">{data.totals.formUnopposedPositions}</div>
+              <p style={{ fontSize: '0.7rem', color: 'var(--gray-500)', margin: '0.35rem 0 0' }}>
+                Exactly one applicant
+              </p>
+            </div>
+          </div>
+
+          <div className="ea-portal-panel">
+            <div className="ea-portal-panel-header">
+              <h2>Forms per electoral area</h2>
+              <Link href="/electoral-area/forms" className="btn btn-secondary btn-sm">
+                Form issuing →
+              </Link>
+            </div>
+            <div className="ea-portal-table-wrap">
+              <table className="ea-portal-table">
+                <thead>
+                  <tr>
+                    <th>Area</th>
+                    <th>Region</th>
+                    <th>Forms issued</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.formsPerArea.map((r) => (
+                    <tr key={`f-${r.areaId}`}>
+                      <td>{r.areaName}</td>
+                      <td>{r.region}</td>
+                      <td>{r.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="ea-portal-panel">
+            <div className="ea-portal-panel-header">
+              <h2>Recent form issues</h2>
+            </div>
+            <div className="ea-portal-table-wrap">
+              <table className="ea-portal-table">
+                <thead>
+                  <tr>
+                    <th>Form #</th>
+                    <th>Name</th>
+                    <th>Position</th>
+                    <th>Area</th>
+                    <th>Status</th>
+                    <th>Issued</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recentForms.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.formNumber}</td>
+                      <td>{r.fullName}</td>
+                      <td style={{ fontSize: '0.8rem' }}>{r.position}</td>
+                      <td>{r.electoralArea?.name ?? '—'}</td>
+                      <td>{r.status}</td>
+                      <td style={{ color: 'var(--gray-500)', fontSize: '0.8rem' }}>
+                        {new Date(r.issuedAt).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 

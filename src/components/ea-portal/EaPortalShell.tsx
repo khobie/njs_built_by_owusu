@@ -6,12 +6,13 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { canAccessEaPortal } from '@/lib/ea-portal-access';
 import { EA_PORTAL_REFRESH_EVENT } from '@/lib/ea-portal-refresh';
 
-type NavItem = { href: string; label: string; exact?: boolean };
+type NavItem = { href: string; label: string; exact?: boolean; matchPrefix?: string };
 
 const nav: readonly NavItem[] = [
   { href: '/ea-portal', label: 'Dashboard', exact: true },
   { href: '/ea-portal/areas', label: 'Electoral areas' },
   { href: '/ea-portal/records', label: 'Records' },
+  { href: '/electoral-area/forms', label: 'Form issuing', matchPrefix: '/electoral-area' },
   { href: '/ea-portal/reassign', label: 'Reassign' },
   { href: '/ea-portal/reports', label: 'Reports' },
 ];
@@ -80,9 +81,13 @@ export function EaPortalShell({
         </div>
         <nav className="ea-portal-nav">
           {nav.map((item) => {
-            const isActive = item.exact === true
-              ? pathname === item.href || pathname === `${item.href}/`
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const isActive = item.matchPrefix
+              ? pathname === item.href ||
+                pathname.startsWith(`${item.matchPrefix}/`) ||
+                pathname === item.matchPrefix
+              : item.exact === true
+                ? pathname === item.href || pathname === `${item.href}/`
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}

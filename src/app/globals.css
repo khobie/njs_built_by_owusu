@@ -1893,3 +1893,55 @@ tr.editing-row:hover {
     padding: 1rem;
   }
 }
+
+.ea-portal-toast-wrap {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+  max-width: min(28rem, calc(100vw - 2rem));
+}
+
+.ea-portal-toast {
+  pointer-events: auto;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.2);
+  animation: ea-portal-toast-in 0.22s ease-out;
+}
+
+.ea-portal-toast.ok {
+  background: #15803d;
+  color: #fff;
+}
+
+.ea-portal-toast.err {
+  background: #b91c1c;
+  color: #fff;
+}
+
+@keyframes ea-portal-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ea-form-steps .ea-form-step-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gray-500, #64748b);
+  margin-bottom: 0.35rem;
+}
