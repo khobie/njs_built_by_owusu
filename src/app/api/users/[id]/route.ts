@@ -16,8 +16,16 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     role,
     isActive,
     areaCodes,
+    eaPortalAreaIds,
     password,
-  } = body as { name?: string; role?: 'SUPER_ADMIN' | 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL'; isActive?: boolean; areaCodes?: string[]; password?: string };
+  } = body as {
+    name?: string;
+    role?: string;
+    isActive?: boolean;
+    areaCodes?: string[];
+    eaPortalAreaIds?: string[];
+    password?: string;
+  };
 
   if (password !== undefined && (typeof password !== 'string' || password.trim().length < 6)) {
     return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
@@ -43,6 +51,16 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if ((role ?? user.role) === 'VETTING_PANEL' && areaCodes.length > 0) {
       await prisma.userElectoralArea.createMany({
         data: areaCodes.map((areaCode) => ({ userId: id, areaCode })),
+      });
+    }
+  }
+
+  if (eaPortalAreaIds !== undefined) {
+    await prisma.userEaPortalArea.deleteMany({ where: { userId: id } });
+    const effectiveRole = role ?? user.role;
+    if (effectiveRole === 'EA_OFFICER' && eaPortalAreaIds.length > 0) {
+      await prisma.userEaPortalArea.createMany({
+        data: eaPortalAreaIds.map((eaPortalAreaId) => ({ userId: id, eaPortalAreaId })),
       });
     }
   }

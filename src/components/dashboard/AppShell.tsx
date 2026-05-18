@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { hasSystemWideAccess, isAdminRole } from '@/lib/roles';
+import { canAccessEaPortal } from '@/lib/ea-portal-access';
 
 function IconPencil() {
   return (
@@ -75,6 +76,17 @@ function IconFilePlus() {
   );
 }
 
+function IconGrid() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  );
+}
+
 export function AppShell({ activeHref, children }: { activeHref: string; children: ReactNode }) {
   const router = useRouter();
   const [role, setRole] = useState<string>('');
@@ -104,6 +116,7 @@ export function AppShell({ activeHref, children }: { activeHref: string; childre
         { href: '/edit-candidate', label: 'Edit candidate', icon: IconPencil },
         { href: '/vetting', label: 'Vetting', icon: IconClipboard },
         { href: '/polling-stations', label: 'Electoral areas', icon: IconBuilding },
+        { href: '/ea-portal', label: 'EA Portal', icon: IconGrid },
         { href: '/reports', label: 'Reports', icon: IconDoc },
         ...(isAdminRole(role) ? ([{ href: '/accounts', label: 'Accounts', icon: IconUsers }] as const) : []),
       ] as const;
@@ -117,6 +130,9 @@ export function AppShell({ activeHref, children }: { activeHref: string; childre
     }
     if (role === 'VETTING_PANEL') {
       return [dash, { href: '/vetting', label: 'Vetting', icon: IconClipboard }] as const;
+    }
+    if (canAccessEaPortal(role)) {
+      return [dash, { href: '/ea-portal', label: 'EA Portal', icon: IconGrid }] as const;
     }
     return [dash] as const;
   })();

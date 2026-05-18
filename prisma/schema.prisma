@@ -102,8 +102,79 @@ model User {
 
   // Relations
   electoralAreas UserElectoralArea[]
+  eaPortalAreas  UserEaPortalArea[]
 
   @@map("users")
+}
+
+/// Electoral Area Management Portal — logically separate from delegate/polling DB tables; same Postgres instance.
+model EaPortalArea {
+  id               String   @id @default(cuid())
+  name             String
+  constituency     String
+  district         String
+  region           String
+  /// Optional link to delegate module `ElectoralArea.code` (integration / polling station directory).
+  delegateAreaCode String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  records    EaPortalRecord[]
+  userLinks  UserEaPortalArea[]
+  activities EaPortalActivity[]
+
+  @@unique([name, constituency, district, region])
+  @@index([delegateAreaCode])
+  @@map("ea_portal_areas")
+}
+
+model EaPortalRecord {
+  id                 String        @id @default(cuid())
+  fullName           String
+  phone              String
+  role               String
+  electoralAreaId    String?
+  electoralArea      EaPortalArea? @relation(fields: [electoralAreaId], references: [id], onDelete: SetNull)
+  pollingStationCode String?
+  pollingStationName String?
+  notes              String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  activities EaPortalActivity[]
+
+  @@index([electoralAreaId])
+  @@index([phone])
+  @@index([role])
+  @@index([createdAt])
+  @@map("ea_portal_records")
+}
+
+model UserEaPortalArea {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eaPortalAreaId String
+  area           EaPortalArea @relation(fields: [eaPortalAreaId], references: [id], onDelete: Cascade)
+  assignedAt     DateTime     @default(now())
+
+  @@unique([userId, eaPortalAreaId])
+  @@map("user_ea_portal_areas")
+}
+
+model EaPortalActivity {
+  id          String          @id @default(cuid())
+  action      String
+  details     String?
+  actorUserId String?
+  areaId      String?
+  area        EaPortalArea?   @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  recordId    String?
+  record      EaPortalRecord? @relation(fields: [recordId], references: [id], onDelete: SetNull)
+  createdAt   DateTime        @default(now())
+
+  @@index([createdAt])
+  @@map("ea_portal_activities")
 }
 
 model UserElectoralArea {

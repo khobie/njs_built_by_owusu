@@ -4,7 +4,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/dashboard/AppShell';
 import { isAdminRole } from '@/lib/roles';
 
-type Role = 'SUPER_ADMIN' | 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL';
+type Role =
+  | 'SUPER_ADMIN'
+  | 'ADMIN'
+  | 'FORM_ISSUER'
+  | 'VETTING_PANEL'
+  | 'EA_PORTAL_ADMIN'
+  | 'EA_OFFICER'
+  | 'EA_DATA_ENTRY';
+
+interface EaPortalAreaOption {
+  id: string;
+  name: string;
+  region: string;
+  district: string;
+}
 
 interface Area {
   id: string;
@@ -19,6 +33,7 @@ interface UserRow {
   role: Role;
   isActive: boolean;
   electoralAreas: { areaCode: string }[];
+  eaPortalAreas: { eaPortalAreaId: string }[];
 }
 
 export default function AccountsPage() {
@@ -26,6 +41,7 @@ export default function AccountsPage() {
   const [meEmail, setMeEmail] = useState('');
   const [users, setUsers] = useState<UserRow[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
+  const [eaPortalAreasList, setEaPortalAreasList] = useState<EaPortalAreaOption[]>([]);
   const [error, setError] = useState('');
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -40,16 +56,23 @@ export default function AccountsPage() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Role>('VETTING_PANEL');
   const [areaCodes, setAreaCodes] = useState<string[]>([]);
+  const [eaPortalAreaIds, setEaPortalAreaIds] = useState<string[]>([]);
+
+  const [assignModalUser, setAssignModalUser] = useState<UserRow | null>(null);
+  const [assignModalIds, setAssignModalIds] = useState<string[]>([]);
+  const [assignSaving, setAssignSaving] = useState(false);
 
   const areaCodeSet = useMemo(() => new Set(areaCodes), [areaCodes]);
+  const eaPortalAreaIdSet = useMemo(() => new Set(eaPortalAreaIds), [eaPortalAreaIds]);
 
   const load = async () => {
     setError('');
     try {
-      const [sRes, uRes, aRes] = await Promise.all([
+      const [sRes, uRes, aRes, epRes] = await Promise.all([
         fetch('/api/auth/session'),
         fetch('/api/users'),
         fetch('/api/electoral-areas'),
+        fetch('/api/ea-portal/areas'),
       ]);
       const s = await sRes.json();
       if (!sRes.ok || !isAdminRole(s?.user?.role)) {
@@ -58,8 +81,29 @@ export default function AccountsPage() {
       }
       setMeRole(s.user.role);
       setMeEmail(s.user.email || '');
-      if (uRes.ok) setUsers(await uRes.json());
+      if (uRes.ok) {
+        const raw: unknown[] = await uRes.json();
+        setUsers(
+          raw.map((row) => {
+            const u = row as UserRow;
+            return {
+              ...u,
+              eaPortalAreas: u.eaPortalAreas ?? [],
+              electoralAreas: u.electoralAreas ?? [],
+            };
+          }),
+        );
+      }
       if (aRes.ok) setAreas(await aRes.json());
+      if (epRes.ok) {
+        const raw: unknown[] = await epRes.json();
+        setEaPortalAreasList(
+          raw.map((row) => {
+            const r = row as { id: string; name: string; region: string; district: string };
+            return { id: r.id, name: r.name, region: r.region, district: r.district };
+          }),
+        );
+      }
     } catch {
       setError('Failed to load account portal data.');
     }
@@ -73,11 +117,23 @@ export default function AccountsPage() {
     e.preventDefault();
     setSaving(true);
     setError('');
+    if (role === 'EA_OFFICER' && eaPortalAreaIds.length === 0) {
+      setError('Electoral Area Officers must be assigned to at least one EA portal area.');
+      setSaving(false);
+      return;
+    }
     try {
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, role, areaCodes }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          role,
+          areaCodes: role === 'VETTING_PANEL' ? areaCodes : [],
+          eaPortalAreaIds: role === 'EA_OFFICER' ? eaPortalAreaIds : [],
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -89,6 +145,7 @@ export default function AccountsPage() {
       setPassword('');
       setRole('VETTING_PANEL');
       setAreaCodes([]);
+      setEaPortalAreaIds([]);
       await load();
     } finally {
       setSaving(false);
@@ -132,6 +189,51 @@ export default function AccountsPage() {
 
   const toggleArea = (code: string) => {
     setAreaCodes((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+  };
+
+  const toggleEaPortalArea = (id: string) => {
+    setEaPortalAreaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const portalNamesForUser = (u: UserRow): string => {
+    const ids = new Set(u.eaPortalAreas.map((x) => x.eaPortalAreaId));
+    const labels = eaPortalAreasList.filter((a) => ids.has(a.id)).map((a) => a.name);
+    return labels.length ? labels.join(', ') : '—';
+  };
+
+  const openEaPortalAssign = (u: UserRow) => {
+    setAssignModalUser(u);
+    setAssignModalIds(u.eaPortalAreas.map((x) => x.eaPortalAreaId));
+  };
+
+  const toggleAssignModalArea = (id: string) => {
+    setAssignModalIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const savePortalAssignments = async () => {
+    if (!assignModalUser) return;
+    if (assignModalIds.length === 0) {
+      setError('Select at least one EA portal area for this officer.');
+      return;
+    }
+    setAssignSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/users/${assignModalUser.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eaPortalAreaIds: assignModalIds }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data as { error?: string })?.error || 'Failed to update EA portal assignments.');
+        return;
+      }
+      setAssignModalUser(null);
+      await load();
+    } finally {
+      setAssignSaving(false);
+    }
   };
 
   const toggleActive = async (u: UserRow) => {
@@ -255,11 +357,23 @@ export default function AccountsPage() {
                 <div className="grid-2">
                   <div className="form-group">
                     <label>Role</label>
-                    <select className="select" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+                    <select
+                      className="select"
+                      value={role}
+                      onChange={(e) => {
+                        const r = e.target.value as Role;
+                        setRole(r);
+                        if (r !== 'VETTING_PANEL') setAreaCodes([]);
+                        if (r !== 'EA_OFFICER') setEaPortalAreaIds([]);
+                      }}
+                    >
                       <option value="SUPER_ADMIN">Super Admin</option>
                       <option value="ADMIN">Admin</option>
                       <option value="FORM_ISSUER">Form Issuer</option>
                       <option value="VETTING_PANEL">Vetting Panel</option>
+                      <option value="EA_PORTAL_ADMIN">EA Portal Admin</option>
+                      <option value="EA_OFFICER">Electoral Area Officer</option>
+                      <option value="EA_DATA_ENTRY">EA Data Entry Officer</option>
                     </select>
                   </div>
                   {role === 'VETTING_PANEL' ? (
@@ -280,6 +394,26 @@ export default function AccountsPage() {
                     </div>
                   ) : null}
                 </div>
+                {role === 'EA_OFFICER' ? (
+                  <div className="form-group">
+                    <label>EA Portal areas (separate from delegate vetting areas)</label>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>
+                      Officers only see records linked to these portal electoral areas. Pick at least one.
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.35rem' }}>
+                      {eaPortalAreasList.map((a) => (
+                        <label key={a.id} style={{ fontSize: '0.85rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={eaPortalAreaIdSet.has(a.id)}
+                            onChange={() => toggleEaPortalArea(a.id)}
+                          />
+                          {a.name} · {a.district}, {a.region}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="form-actions">
                   <button type="submit" className="btn btn-primary" disabled={saving}>
                     {saving ? 'Creating...' : 'Create Account'}
@@ -297,7 +431,8 @@ export default function AccountsPage() {
                       <th>Name</th>
                       <th>Email</th>
                       <th>Role</th>
-                      <th>Areas</th>
+                      <th>Vetting areas</th>
+                      <th>EA Portal</th>
                       <th>Status</th>
                       <th>Action</th>
                     </tr>
@@ -309,6 +444,7 @@ export default function AccountsPage() {
                         <td>{u.email}</td>
                         <td>{u.role}</td>
                         <td>{u.electoralAreas.map((a) => a.areaCode).join(', ') || '—'}</td>
+                        <td style={{ maxWidth: '14rem', fontSize: '0.85rem', verticalAlign: 'top' }}>{portalNamesForUser(u)}</td>
                         <td>{u.isActive ? 'Active' : 'Inactive'}</td>
                         <td>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -318,6 +454,11 @@ export default function AccountsPage() {
                             <button className="btn btn-primary btn-sm" onClick={() => void changePassword(u)}>
                               Change Password
                             </button>
+                            {u.role === 'EA_OFFICER' ? (
+                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => openEaPortalAssign(u)}>
+                                EA portal areas
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -329,6 +470,69 @@ export default function AccountsPage() {
           </>
         ) : null}
       </div>
+
+      {assignModalUser ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ea-portal-assign-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem',
+          }}
+          onClick={() => {
+            if (!assignSaving) setAssignModalUser(null);
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--surface, #fff)',
+              padding: '1.25rem',
+              borderRadius: '10px',
+              maxWidth: '36rem',
+              width: '100%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="ea-portal-assign-title" style={{ marginTop: 0 }}>
+              EA portal areas — {assignModalUser.name}
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+              This officer only sees portal records assigned to the electoral areas you select here.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.35rem' }}>
+              {eaPortalAreasList.map((a) => (
+                <label key={a.id} style={{ fontSize: '0.85rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={assignModalIds.includes(a.id)}
+                    onChange={() => toggleAssignModalArea(a.id)}
+                    disabled={assignSaving}
+                  />
+                  {a.name} · {a.district}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+              <button type="button" className="btn btn-secondary" disabled={assignSaving} onClick={() => setAssignModalUser(null)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary" disabled={assignSaving} onClick={() => void savePortalAssignments()}>
+                {assignSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppShell>
   );
 }

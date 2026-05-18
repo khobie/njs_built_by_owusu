@@ -1,4 +1,12 @@
-export const ROLES = ['SUPER_ADMIN', 'ADMIN', 'FORM_ISSUER', 'VETTING_PANEL'] as const;
+export const ROLES = [
+  'SUPER_ADMIN',
+  'ADMIN',
+  'FORM_ISSUER',
+  'VETTING_PANEL',
+  'EA_PORTAL_ADMIN',
+  'EA_OFFICER',
+  'EA_DATA_ENTRY',
+] as const;
 
 export type Role = (typeof ROLES)[number];
 

@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
       isActive: true,
       createdAt: true,
       electoralAreas: { select: { areaCode: true } },
+      eaPortalAreas: { select: { eaPortalAreaId: true } },
     },
   });
   return NextResponse.json(users);
@@ -30,12 +31,20 @@ export async function POST(request: NextRequest) {
   if (!isAdminRole(sessionUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await request.json();
-  const { name, email, password, role, areaCodes = [] } = body as {
+  const {
+    name,
+    email,
+    password,
+    role,
+    areaCodes = [],
+    eaPortalAreaIds = [],
+  } = body as {
     name: string;
     email: string;
     password: string;
-    role: 'SUPER_ADMIN' | 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL';
+    role: string;
     areaCodes?: string[];
+    eaPortalAreaIds?: string[];
   };
 
   if (!name || !email || !password || !role) {
@@ -54,6 +63,12 @@ export async function POST(request: NextRequest) {
   if (role === 'VETTING_PANEL' && areaCodes.length) {
     await prisma.userElectoralArea.createMany({
       data: areaCodes.map((areaCode) => ({ userId: created.id, areaCode })),
+    });
+  }
+
+  if (role === 'EA_OFFICER' && eaPortalAreaIds.length) {
+    await prisma.userEaPortalArea.createMany({
+      data: eaPortalAreaIds.map((eaPortalAreaId) => ({ userId: created.id, eaPortalAreaId })),
     });
   }
 

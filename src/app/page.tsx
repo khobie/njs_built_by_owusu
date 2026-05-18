@@ -8,6 +8,7 @@ import { ContestDonut, DelegatesByAreaChart, VerificationDonut } from '@/compone
 import { DASHBOARD_REFRESH_EVENT } from '@/lib/dashboard-refresh';
 import type { DashboardAggregates } from '@/lib/dashboard-aggregates';
 import { hasSystemWideAccess } from '@/lib/roles';
+import { canAccessEaPortal } from '@/lib/ea-portal-access';
 import { CANONICAL_POSITION_COUNT } from '@/lib/delegate-positions';
 
 interface ElectoralArea {
@@ -273,6 +274,11 @@ export default function DashboardPage() {
                     Edit candidate
                   </Link>
                 </>
+              ) : null}
+              {canAccessEaPortal(sessionRole) ? (
+                <Link href="/ea-portal" className="btn btn-primary">
+                  Electoral Area Portal
+                </Link>
               ) : null}
             </div>
           </section>

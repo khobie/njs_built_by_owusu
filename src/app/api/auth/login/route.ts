@@ -63,12 +63,22 @@ export async function POST(request: NextRequest) {
         })
       : [];
 
+    let eaPortalAreas: { id: string; name: string; region: string }[] = [];
+    if (user.role === 'EA_OFFICER') {
+      const links = await prisma.userEaPortalArea.findMany({
+        where: { userId: user.id },
+        select: { area: { select: { id: true, name: true, region: true } } },
+      });
+      eaPortalAreas = links.map((l) => l.area);
+    }
+
     const token = createAuthToken(user.id, user.role as Role);
 
     const response = NextResponse.json({
       message: 'Login successful',
       user: safeUser,
       userAreas: user.role === 'VETTING_PANEL' ? userAreas.map(ua => ua.area) : [],
+      eaPortalAreas,
     });
     response.cookies.set({
       name: getAuthCookieName(),
