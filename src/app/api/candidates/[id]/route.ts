@@ -5,6 +5,7 @@ import { recalculateContestStatusForGroup } from '@/lib/contest-status';
 import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
 import { canVet } from '@/lib/roles';
 import { CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
+import { FORM_NUMBER_MAX_LENGTH } from '@/lib/form-number';
 
 function normalizeGhanaPhone(raw: string): string {
   const digits = raw.replace(/[^\d]/g, '');
@@ -71,15 +72,22 @@ export async function PATCH(
       if (typeof body.formNumber !== 'string' || body.formNumber.trim() === '') {
         return NextResponse.json({ error: 'Form number cannot be empty.' }, { status: 400 });
       }
-      if (body.formNumber !== existing.formNumber) {
+      const trimmedFn = body.formNumber.trim();
+      if (trimmedFn.length > FORM_NUMBER_MAX_LENGTH) {
+        return NextResponse.json(
+          { error: `Form number must be at most ${FORM_NUMBER_MAX_LENGTH} characters.` },
+          { status: 400 }
+        );
+      }
+      if (trimmedFn !== existing.formNumber) {
         const dupe = await prisma.candidate.findFirst({
-          where: { formNumber: body.formNumber.trim(), NOT: { id } },
+          where: { formNumber: trimmedFn, NOT: { id } },
         });
         if (dupe) {
           return NextResponse.json({ error: 'Another candidate already uses this form number.' }, { status: 409 });
         }
       }
-      updateData.formNumber = body.formNumber.trim();
+      updateData.formNumber = trimmedFn;
     }
     if (body.surname !== undefined) {
       if (typeof body.surname !== 'string' || body.surname.trim() === '') {

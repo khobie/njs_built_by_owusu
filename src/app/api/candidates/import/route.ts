@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
 import { canIssueForms } from '@/lib/roles';
+import { FORM_NUMBER_MAX_LENGTH } from '@/lib/form-number';
 
 interface ImportCandidate {
   formNumber?: string;
@@ -47,8 +48,22 @@ function normalizePhone(phone: string): string {
   return cleaned;
 }
 
-function generateFormNumber(index: number): string {
-  return `NPP${String(index + 1).padStart(4, '0')}`;
+function generateFormNumber(serial: number): string {
+  if (serial < 1 || serial > 999_999) {
+    throw new Error(`Form number serial out of range (1–999999): ${serial}`);
+  }
+  return String(serial).padStart(FORM_NUMBER_MAX_LENGTH, '0');
+}
+
+function pickImportFormNumber(candidate: ImportCandidate): string {
+  const c = candidate as Record<string, unknown>;
+  const raw =
+    c.formNumber ??
+    c.formnumber ??
+    c['Form Number'] ??
+    c['form_number'] ??
+    c['form number'];
+  return String(raw ?? '').trim();
 }
 
 export async function POST(request: NextRequest) {
@@ -85,18 +100,7 @@ export async function POST(request: NextRequest) {
       pollingStations.map((s) => [s.name.toUpperCase().trim(), s.code])
     );
 
-    // Get the highest existing form number
-    const lastCandidate = await prisma.candidate.findFirst({
-      orderBy: { formNumber: 'desc' },
-      select: { formNumber: true },
-    });
-    let formCounter = 0;
-    if (lastCandidate?.formNumber) {
-      const match = lastCandidate.formNumber.match(/(\d+)/);
-      if (match) {
-        formCounter = parseInt(match[1], 10);
-      }
-    }
+    const candidateCount = await prisma.candidate.count();
 
     const results = {
       imported: 0,
@@ -157,8 +161,25 @@ export async function POST(request: NextRequest) {
           pollingStationCode = stationNameMap.get(stationName.toUpperCase());
         }
 
-        // Auto-generate form number if not provided
-        const formNumber = candidate.formNumber || generateFormNumber(formCounter + results.imported);
+        let formNumber = pickImportFormNumber(candidate);
+        if (!formNumber) {
+          const serial = candidateCount + results.imported + 1;
+          try {
+            formNumber = generateFormNumber(serial);
+          } catch (e) {
+            results.skipped++;
+            results.errors.push(
+              `Row ${i + 1}: Cannot auto-assign form number (${e instanceof Error ? e.message : 'limit reached'})`
+            );
+            continue;
+          }
+        } else if (formNumber.length > FORM_NUMBER_MAX_LENGTH) {
+          results.skipped++;
+          results.errors.push(
+            `Row ${i + 1}: Form number must be at most ${FORM_NUMBER_MAX_LENGTH} characters`
+          );
+          continue;
+        }
 
         // Build comment with station info if station wasn't matched
         let comment = candidate.comment || null;

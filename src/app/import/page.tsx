@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
 import { hasSystemWideAccess } from '@/lib/roles';
+import { FORM_NUMBER_MAX_LENGTH } from '@/lib/form-number';
 
 interface ImportResult {
   imported: number;
@@ -128,10 +129,10 @@ export default function ImportPage() {
   );
 
   const downloadTemplate = () => {
-    const template = `surname\tfirstname\tmiddlename\tphone\tage\telectoralArea\tstation\tposition\tstatus
-ANTWI\tSETH\tKWADWO\t550795011\t39\tANGLICAN\tST. MARY'S KINDARGATEN K'DUA\tSECRETARY\tOld Delegate
-AGYEKUM-BOADU\tVALERIA\t\t243455466\t45\tOLD ESTATE EAST\tHOUSING CORP OFFICE OLD ESTATE 1\tSECRETARY\tOld Delegate
-JULIET\tKONADU\t\t249991411\t68\tTWO STREAMS\tMETHODIST CHAPEL\tWOMEN ORGANIZER\tOld Delegate`;
+    const template = `surname\tfirstname\tmiddlename\tphone\tage\telectoralArea\tstation\tposition\tstatus\tformNumber
+ANTWI\tSETH\tKWADWO\t550795011\t39\tANGLICAN\tST. MARY'S KINDARGATEN K'DUA\tSECRETARY\tOld Delegate\t84A2F1
+AGYEKUM-BOADU\tVALERIA\t\t243455466\t45\tOLD ESTATE EAST\tHOUSING CORP OFFICE OLD ESTATE 1\tSECRETARY\tOld Delegate\t
+JULIET\tKONADU\t\t249991411\t68\tTWO STREAMS\tMETHODIST CHAPEL\tWOMEN ORGANIZER\tOld Delegate\t`;
 
     const blob = new Blob([template], { type: 'text/tab-separated-values' });
     const url = URL.createObjectURL(blob);
@@ -144,6 +145,16 @@ JULIET\tKONADU\t\t249991411\t68\tTWO STREAMS\tMETHODIST CHAPEL\tWOMEN ORGANIZER\
     URL.revokeObjectURL(url);
   };
 
+  const rowFormNumber = (row: Record<string, string>): string =>
+    (
+      row.formNumber ||
+      row['Form Number'] ||
+      row.FormNumber ||
+      row.form_number ||
+      row['form number'] ||
+      ''
+    ).trim();
+
   const handleImport = async () => {
     if (csvData.length === 0) return;
 
@@ -151,18 +162,41 @@ JULIET\tKONADU\t\t249991411\t68\tTWO STREAMS\tMETHODIST CHAPEL\tWOMEN ORGANIZER\
     setImportResult(null);
     setError('');
 
+    const formNumberErrors: string[] = [];
+    csvData.forEach((row, idx) => {
+      const fn = rowFormNumber(row);
+      if (fn.length > FORM_NUMBER_MAX_LENGTH) {
+        formNumberErrors.push(
+          `Row ${idx + 1}: form number is ${fn.length} characters (max ${FORM_NUMBER_MAX_LENGTH})`
+        );
+      }
+    });
+    if (formNumberErrors.length > 0) {
+      setImporting(false);
+      setError(
+        formNumberErrors.slice(0, 8).join(' ') +
+          (formNumberErrors.length > 8 ? ` …and ${formNumberErrors.length - 8} more.` : '')
+      );
+      return;
+    }
+
     try {
-      const candidates = csvData.map((row) => ({
-        surname: row.surname || row.Surname || row.SURNAME || '',
-        firstname: row.firstname || row.firstName || row['First Name'] || row['first_name'] || '',
-        middlename: row.middlename || row.middleName || row['Middle Name'] || row['middle_name'] || '',
-        phone: row.phone || row.Phone || row.phoneNumber || row['Phone Number'] || row['phone_number'] || '',
-        age: row.age || row.Age || '',
-        electoralArea: row.electoralArea || row['Electoral Area'] || row.electoral_area || row['electoral area'] || '',
-        station: row.station || row.Station || row.STATION || row['Polling Station'] || row['polling_station'] || '',
-        position: row.position || row.Position || row.POSITION || '',
-        status: row.status || row.Status || row.STATUS || row['Delegate Type'] || row.delegateType || '',
-      }));
+      const candidates = csvData.map((row) => {
+        const formNumber = rowFormNumber(row);
+        return {
+          surname: row.surname || row.Surname || row.SURNAME || '',
+          firstname: row.firstname || row.firstName || row['First Name'] || row['first_name'] || '',
+          middlename: row.middlename || row.middleName || row['Middle Name'] || row['middle_name'] || '',
+          phone: row.phone || row.Phone || row.phoneNumber || row['Phone Number'] || row['phone_number'] || '',
+          age: row.age || row.Age || '',
+          electoralArea:
+            row.electoralArea || row['Electoral Area'] || row.electoral_area || row['electoral area'] || '',
+          station: row.station || row.Station || row.STATION || row['Polling Station'] || row['polling_station'] || '',
+          position: row.position || row.Position || row.POSITION || '',
+          status: row.status || row.Status || row.STATUS || row['Delegate Type'] || row.delegateType || '',
+          ...(formNumber ? { formNumber } : {}),
+        };
+      });
 
       const res = await fetch('/api/candidates/import', {
         method: 'POST',

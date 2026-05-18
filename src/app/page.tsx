@@ -504,8 +504,8 @@ export default function DashboardPage() {
                   non-canonical role): {agg.delegatesExcludedFromCanonicalGrid.toLocaleString()}.
 
                   <div style={{ marginTop: '0.5rem' }}>
-                    For vacancy by area or the polling-station directory, use the sidebar links <strong>Electoral areas</strong> or{' '}
-                    <strong>Polling stations</strong> — they are not shown on this dashboard by default.
+                    For vacancy by electoral area, use the sidebar link <strong>Electoral areas</strong> — it is not shown on this
+                    dashboard by default.
                   </div>
                   <div style={{ marginTop: '0.5rem' }}>
                     Verification donut parts sum to delegates: Verified {agg.verificationVerified}, pending{' '}

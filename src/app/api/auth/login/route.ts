@@ -82,9 +82,13 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     console.error('Login failed:', error);
-    return NextResponse.json(
-      { error: 'Failed to login' },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : String(error);
+    const dbMisconfigured =
+      /DATABASE_URL|datasource|PrismaClientInitializationError|postgresql:\/\//i.test(message) &&
+      /must start with the protocol|ECONNREFUSED|P1001|Can't reach database/i.test(message);
+    const errorText = dbMisconfigured
+      ? 'Database not reachable. Set a valid DATABASE_URL in .env (postgresql://…), run migrations, then seed. See .env.example.'
+      : 'Failed to login';
+    return NextResponse.json({ error: errorText }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { FORM_NUMBER_MAX_LENGTH } from '@/lib/form-number';
 
 interface ElectoralArea {
   id: string;
@@ -231,9 +232,14 @@ export default function VettingPage() {
   };
 
   const saveEdit = async (id: string) => {
+    const fn = (editForm.formNumber || '').trim();
+    if (!fn || fn.length > FORM_NUMBER_MAX_LENGTH) {
+      alert(`Form number must be 1–${FORM_NUMBER_MAX_LENGTH} characters.`);
+      return;
+    }
     setSavingId(id);
     try {
-      const payload: Record<string, unknown> = { ...editForm };
+      const payload: Record<string, unknown> = { ...editForm, formNumber: fn };
       if (editForm.age) payload.age = parseInt(editForm.age, 10);
 
       const res = await fetch(`/api/candidates/${id}`, {
@@ -570,6 +576,7 @@ export default function VettingPage() {
                               className="input"
                               value={editForm.formNumber || ''}
                               onChange={(e) => handleEditChange('formNumber', e.target.value)}
+                              maxLength={FORM_NUMBER_MAX_LENGTH}
                             />
                           </td>
                           <td>

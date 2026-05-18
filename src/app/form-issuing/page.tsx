@@ -7,6 +7,7 @@ import { notifyDashboardRefresh } from '@/lib/dashboard-refresh';
 import { useRouter } from 'next/navigation';
 import { canIssueForms } from '@/lib/roles';
 import { CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
+import { FORM_NUMBER_MAX_LENGTH } from '@/lib/form-number';
 
 interface ElectoralArea {
   id: string;
@@ -14,10 +15,21 @@ interface ElectoralArea {
   code: string;
 }
 
-function makeFormNumber() {
-  const stamp = Date.now().toString().slice(-8);
-  const rand = Math.floor(Math.random() * 900 + 100);
-  return `NJS-${stamp}-${rand}`;
+/** Unique form ref: exactly `FORM_NUMBER_MAX_LENGTH` characters (hex from random bytes). */
+function makeFormNumber(): string {
+  const byteLen = Math.ceil(FORM_NUMBER_MAX_LENGTH / 2);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(byteLen);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase()
+      .slice(0, FORM_NUMBER_MAX_LENGTH);
+  }
+  return String(Math.floor(Math.random() * 10 ** FORM_NUMBER_MAX_LENGTH)).padStart(
+    FORM_NUMBER_MAX_LENGTH,
+    '0'
+  );
 }
 
 function normalizeGhanaPhone(raw: string): string {
@@ -116,6 +128,11 @@ export default function FormIssuingPage() {
       setError('Please select an electoral area.');
       return;
     }
+    const trimmedForm = formNumber.trim();
+    if (trimmedForm.length < 1 || trimmedForm.length > FORM_NUMBER_MAX_LENGTH) {
+      setError(`Form number must be 1–${FORM_NUMBER_MAX_LENGTH} characters.`);
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -123,7 +140,7 @@ export default function FormIssuingPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          formNumber: formNumber.trim(),
+          formNumber: trimmedForm,
           surname: surname.trim(),
           firstName: firstName.trim(),
           middleName: middleName.trim() || undefined,
@@ -182,8 +199,15 @@ export default function FormIssuingPage() {
           <form onSubmit={onSubmit}>
             <div className="grid-2">
               <div className="form-group">
-                <label>Form Number *</label>
-                <input className="input" value={formNumber} onChange={(e) => setFormNumber(e.target.value)} required />
+                <label>Form Number * <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>(max {FORM_NUMBER_MAX_LENGTH})</span></label>
+                <input
+                  className="input"
+                  value={formNumber}
+                  onChange={(e) => setFormNumber(e.target.value)}
+                  maxLength={FORM_NUMBER_MAX_LENGTH}
+                  placeholder="e.g. 84A2F1"
+                  required
+                />
               </div>
               <div className="form-group">
                 <label>Phone Number *</label>

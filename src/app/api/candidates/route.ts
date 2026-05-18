@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
 import { canIssueForms } from '@/lib/roles';
 import { CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
+import { FORM_NUMBER_MAX_LENGTH } from '@/lib/form-number';
 
 function normalizeGhanaPhone(raw: string): string {
   const digits = raw.replace(/[^\d]/g, '');
@@ -17,7 +18,18 @@ function normalizePosition(raw: string): string {
 }
 
 const createCandidateSchema = z.object({
-  formNumber: z.string().min(1, 'Form number is required'),
+  formNumber: z
+    .string()
+    .transform((s) => s.trim())
+    .pipe(
+      z
+        .string()
+        .min(1, 'Form number is required')
+        .max(
+          FORM_NUMBER_MAX_LENGTH,
+          `Form number must be at most ${FORM_NUMBER_MAX_LENGTH} characters`
+        )
+    ),
   surname: z.string().min(1, 'Surname is required'),
   firstName: z.string().min(1, 'First name is required'),
   middleName: z.string().optional(),
