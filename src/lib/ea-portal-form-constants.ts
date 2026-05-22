@@ -17,8 +17,17 @@ export type EaFormDelegateType = (typeof EA_FORM_DELEGATE_TYPES)[number];
 
 export const EA_FORM_NUMBER_MAX_LEN = 6;
 
-export const EA_FORM_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED'] as const;
+export const EA_FORM_STATUSES = [
+  'ISSUED',
+  'RETURNED',
+  'PENDING_VETTING',
+  'VERIFIED',
+  'REJECTED',
+] as const;
 export type EaFormStatus = (typeof EA_FORM_STATUSES)[number];
+
+/** @deprecated legacy status — mapped to PENDING_VETTING in APIs */
+export const EA_FORM_LEGACY_STATUSES = ['PENDING'] as const;
 
 export function normalizeEaFormPhone(input: string): string {
   return String(input).replace(/\s+/g, '').trim();

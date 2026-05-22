@@ -1,141 +1,142 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { recordsVisibleWhere, areaFilterForScope, formsVisibleWhere } from '@/lib/ea-portal-access';
+import { areaFilterForScope, formsVisibleWhere } from '@/lib/ea-portal-access';
+import { countContestSlots } from '@/lib/ea-portal-delegate';
 import { requireEaPortal } from '@/lib/ea-portal-session';
+
+function statusCount(rows: { status: string; _count: { _all: number } }[], ...keys: string[]) {
+  return keys.reduce((n, k) => n + (rows.find((x) => x.status === k)?._count._all ?? 0), 0);
+}
 
 export async function GET(request: NextRequest) {
   const gate = await requireEaPortal(request);
   if (!gate.ok) return gate.response;
 
-  const { scope } = gate;
-
-  const areaWhere = areaFilterForScope(scope);
-  const recordBase = recordsVisibleWhere(scope);
-  const formsBase = formsVisibleWhere(scope);
+  const formsBase = formsVisibleWhere(gate.scope);
+  const areaWhere = areaFilterForScope(gate.scope);
 
   const [
     areaCount,
-    recordCount,
-    unassignedCount,
-    byArea,
-    recentRecords,
-    recentActivity,
     formsTotal,
-    formsByStatus,
-    formPositionGroups,
-    formsPerArea,
+    byStatus,
+    byDelegateType,
+    byArea,
+    byPosition,
     recentForms,
+    recentActivity,
+    contestStats,
   ] = await Promise.all([
-      prisma.eaPortalArea.count({ where: areaWhere }),
-      prisma.eaPortalRecord.count({ where: recordBase }),
-      prisma.eaPortalRecord.count({
-        where: {
-          AND: [recordBase, { electoralAreaId: null }],
-        },
-      }),
-      prisma.eaPortalArea.findMany({
-        where: areaWhere,
-        orderBy: { name: 'asc' },
-        select: {
-          id: true,
-          name: true,
-          region: true,
-          _count: { select: { records: true } },
-        },
-      }),
-      prisma.eaPortalRecord.findMany({
-        where: recordBase,
-        orderBy: { createdAt: 'desc' },
-        take: 12,
-        select: {
-          id: true,
-          fullName: true,
-          role: true,
-          phone: true,
-          createdAt: true,
-          electoralArea: { select: { id: true, name: true } },
-        },
-      }),
-      prisma.eaPortalActivity.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 15,
-        select: {
-          id: true,
-          action: true,
-          details: true,
-          createdAt: true,
-          area: { select: { id: true, name: true } },
-          record: { select: { id: true, fullName: true } },
-        },
-      }),
-      prisma.eaPortalIssuedForm.count({ where: formsBase }),
-      prisma.eaPortalIssuedForm.groupBy({
-        by: ['status'],
-        where: formsBase,
-        _count: { _all: true },
-      }),
-      prisma.eaPortalIssuedForm.groupBy({
-        by: ['electoralAreaId', 'position'],
-        where: formsBase,
-        _count: { _all: true },
-      }),
-      prisma.eaPortalArea.findMany({
-        where: areaWhere,
-        orderBy: { name: 'asc' },
-        select: {
-          id: true,
-          name: true,
-          region: true,
-          _count: { select: { issuedForms: true } },
-        },
-      }),
-      prisma.eaPortalIssuedForm.findMany({
-        where: formsBase,
-        orderBy: { issuedAt: 'desc' },
-        take: 10,
-        select: {
-          id: true,
-          fullName: true,
-          position: true,
-          formNumber: true,
-          status: true,
-          issuedAt: true,
-          electoralArea: { select: { id: true, name: true } },
-        },
-      }),
-    ]);
+    prisma.eaPortalArea.count({ where: areaWhere }),
+    prisma.eaPortalIssuedForm.count({ where: formsBase }),
+    prisma.eaPortalIssuedForm.groupBy({
+      by: ['status'],
+      where: formsBase,
+      _count: { _all: true },
+    }),
+    prisma.eaPortalIssuedForm.groupBy({
+      by: ['delegateType'],
+      where: formsBase,
+      _count: { _all: true },
+    }),
+    prisma.eaPortalArea.findMany({
+      where: areaWhere,
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        region: true,
+        _count: { select: { issuedForms: true } },
+      },
+    }),
+    prisma.eaPortalIssuedForm.groupBy({
+      by: ['position'],
+      where: formsBase,
+      _count: { _all: true },
+    }),
+    prisma.eaPortalIssuedForm.findMany({
+      where: formsBase,
+      orderBy: { issuedAt: 'desc' },
+      take: 12,
+      select: {
+        id: true,
+        fullName: true,
+        position: true,
+        formNumber: true,
+        status: true,
+        delegateType: true,
+        issuedAt: true,
+        electoralArea: { select: { id: true, name: true } },
+        pollingStationName: true,
+      },
+    }),
+    prisma.eaPortalActivity.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        action: true,
+        details: true,
+        createdAt: true,
+        area: { select: { name: true } },
+        form: { select: { formNumber: true, fullName: true } },
+      },
+    }),
+    countContestSlots(formsBase),
+  ]);
 
-  const statusCount = (s: string) =>
-    formsByStatus.find((x) => x.status === s)?._count._all ?? 0;
-  const contestSlots = formPositionGroups.filter((g) => g._count._all > 1).length;
-  const unopposedSlots = formPositionGroups.filter((g) => g._count._all === 1).length;
+  const issued = statusCount(byStatus, 'ISSUED');
+  const returned = statusCount(byStatus, 'RETURNED');
+  const pendingVetting = statusCount(byStatus, 'PENDING_VETTING', 'PENDING');
+  const verified = statusCount(byStatus, 'VERIFIED');
+  const rejected = statusCount(byStatus, 'REJECTED');
+
+  const newDelegates = byDelegateType.find((x) => x.delegateType === 'NEW')?._count._all ?? 0;
+  const oldDelegates = byDelegateType.find((x) => x.delegateType === 'OLD')?._count._all ?? 0;
+
+  const verificationRate =
+    formsTotal > 0 ? Math.round((verified / formsTotal) * 1000) / 10 : 0;
+  const returnRate =
+    formsTotal > 0 ? Math.round((returned / formsTotal) * 1000) / 10 : 0;
 
   return NextResponse.json({
     totals: {
       electoralAreas: areaCount,
-      records: recordCount,
-      unassignedRecords: unassignedCount,
+      totalDelegates: formsTotal,
       formsIssued: formsTotal,
-      formsPending: statusCount('PENDING'),
-      formsVerified: statusCount('VERIFIED'),
-      formsRejected: statusCount('REJECTED'),
-      formContestPositions: contestSlots,
-      formUnopposedPositions: unopposedSlots,
+      returnedForms: returned,
+      pendingVetting,
+      verifiedDelegates: verified,
+      rejectedDelegates: rejected,
+      contests: contestStats.contests,
+      unopposedPositions: contestStats.unopposed,
+      newDelegates,
+      oldDelegates,
+      verificationRate,
+      returnRate,
     },
-    recordsPerArea: byArea.map((a) => ({
-      areaId: a.id,
-      areaName: a.name,
-      region: a.region,
-      count: a._count.records,
-    })),
-    formsPerArea: formsPerArea.map((a) => ({
-      areaId: a.id,
-      areaName: a.name,
-      region: a.region,
-      count: a._count.issuedForms,
-    })),
+    charts: {
+      byArea: byArea.map((a) => ({
+        areaId: a.id,
+        areaName: a.name,
+        region: a.region,
+        count: a._count.issuedForms,
+      })),
+      byPosition: byPosition
+        .map((p) => ({ position: p.position, count: p._count._all }))
+        .sort((a, b) => b.count - a.count),
+      delegateType: [
+        { type: 'NEW', count: newDelegates },
+        { type: 'OLD', count: oldDelegates },
+      ],
+      vettingProgress: [
+        { label: 'Issued', count: issued },
+        { label: 'Returned', count: returned },
+        { label: 'Pending vetting', count: pendingVetting },
+        { label: 'Verified', count: verified },
+        { label: 'Rejected', count: rejected },
+      ],
+    },
     recentForms,
-    recentRecords,
     recentActivity,
   });
 }

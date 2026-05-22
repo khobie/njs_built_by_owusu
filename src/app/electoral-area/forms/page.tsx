@@ -88,11 +88,28 @@ export default function ElectoralAreaFormsPage() {
     delegateType: 'NEW' as EaFormDelegateType,
     comment: '',
     dateIssued: todayDate(),
+    sourceCandidateId: '' as string,
   });
 
-  const [stationQuery, setStationQuery] = useState('');
-  const [stationHits, setStationHits] = useState<PollingSearchHit[]>([]);
-  const [stationSearchBusy, setStationSearchBusy] = useState(false);
+  const [stationList, setStationList] = useState<{ code: string; name: string }[]>([]);
+  const [stationsLoading, setStationsLoading] = useState(false);
+  const [autoFormNumber, setAutoFormNumber] = useState(true);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importQ, setImportQ] = useState('');
+  const [importHits, setImportHits] = useState<
+    {
+      id: string;
+      surname: string;
+      firstName: string;
+      middleName: string | null;
+      phone: string;
+      delegateType: string;
+      position: string;
+      pollingStationCode: string | null;
+      pollingStationName: string | null;
+      electoralAreaName: string;
+    }[]
+  >([]);
 
   const [editStationQuery, setEditStationQuery] = useState('');
   const [editStationHits, setEditStationHits] = useState<PollingSearchHit[]>([]);
@@ -147,32 +164,40 @@ export default function ElectoralAreaFormsPage() {
   }, []);
 
   useEffect(() => {
-    if (!issue.electoralAreaId || stationQuery.trim().length < 2) {
-      setStationHits([]);
+    if (!issue.electoralAreaId) {
+      setStationList([]);
+      return;
+    }
+    void (async () => {
+      setStationsLoading(true);
+      try {
+        const res = await fetch(
+          `/api/ea-portal/polling-stations/list?eaPortalAreaId=${encodeURIComponent(issue.electoralAreaId)}`,
+          { cache: 'no-store' }
+        );
+        if (res.ok) setStationList(await res.json());
+        else setStationList([]);
+      } finally {
+        setStationsLoading(false);
+      }
+    })();
+  }, [issue.electoralAreaId]);
+
+  useEffect(() => {
+    if (!importOpen || importQ.trim().length < 2) {
+      setImportHits([]);
       return;
     }
     const t = window.setTimeout(() => {
       void (async () => {
-        setStationSearchBusy(true);
-        try {
-          const p = new URLSearchParams({
-            q: stationQuery.trim(),
-            eaPortalAreaId: issue.electoralAreaId,
-          });
-          const res = await fetch(`/api/ea-portal/polling-stations/search?${p}`, { cache: 'no-store' });
-          if (res.ok) {
-            const data = (await res.json()) as PollingSearchHit[];
-            setStationHits(Array.isArray(data) ? data : []);
-          } else {
-            setStationHits([]);
-          }
-        } finally {
-          setStationSearchBusy(false);
-        }
+        const p = new URLSearchParams({ q: importQ.trim() });
+        if (issue.electoralAreaId) p.set('electoralAreaId', issue.electoralAreaId);
+        const res = await fetch(`/api/ea-portal/delegates/import-search?${p}`);
+        if (res.ok) setImportHits(await res.json());
       })();
     }, 320);
     return () => window.clearTimeout(t);
-  }, [stationQuery, issue.electoralAreaId]);
+  }, [importOpen, importQ, issue.electoralAreaId]);
 
   useEffect(() => {
     if (!modal) {
@@ -240,8 +265,25 @@ export default function ElectoralAreaFormsPage() {
       pollingStationCode: '',
       pollingStationName: '',
     }));
-    setStationQuery('');
-    setStationHits([]);
+    setStationList([]);
+  };
+
+  const applyImport = (hit: (typeof importHits)[0]) => {
+    setIssue((s) => ({
+      ...s,
+      surname: hit.surname,
+      firstName: hit.firstName,
+      middleName: hit.middleName ?? '',
+      phone: hit.phone,
+      delegateType: hit.delegateType === 'OLD' ? 'OLD' : 'NEW',
+      position: hit.position || s.position,
+      pollingStationCode: hit.pollingStationCode ?? '',
+      pollingStationName: hit.pollingStationName ?? '',
+      sourceCandidateId: hit.id,
+    }));
+    setImportOpen(false);
+    setImportQ('');
+    setImportHits([]);
   };
 
   const submitIssue = async (e: React.FormEvent) => {
@@ -254,17 +296,25 @@ export default function ElectoralAreaFormsPage() {
       setToast({ type: 'err', text: 'Surname and first name are required.' });
       return;
     }
+    if (!issue.pollingStationCode) {
+      setToast({ type: 'err', text: 'Select a polling station.' });
+      return;
+    }
     if (!issue.position) {
       setToast({ type: 'err', text: 'Choose a position applied for.' });
       return;
     }
-    const fn = issue.formNumber.replace(/[^A-Za-z0-9]/g, '').slice(0, EA_FORM_NUMBER_MAX_LEN);
-    if (!/^[A-Za-z0-9]{1,6}$/.test(fn)) {
-      setToast({
-        type: 'err',
-        text: `Form number must be 1–${EA_FORM_NUMBER_MAX_LEN} letters or digits (e.g. 1A12E7).`,
-      });
-      return;
+    let fn: string | undefined;
+    if (!autoFormNumber) {
+      const manual = issue.formNumber.replace(/[^A-Za-z0-9]/g, '').slice(0, EA_FORM_NUMBER_MAX_LEN);
+      if (!/^[A-Za-z0-9]{1,6}$/.test(manual)) {
+        setToast({
+          type: 'err',
+          text: `Form number must be 1–${EA_FORM_NUMBER_MAX_LEN} letters or digits (e.g. 1A12E7).`,
+        });
+        return;
+      }
+      fn = manual;
     }
     setBusyIssue(true);
     try {
@@ -277,12 +327,13 @@ export default function ElectoralAreaFormsPage() {
           middleName: issue.middleName.trim() || null,
           phone: issue.phone,
           electoralAreaId: issue.electoralAreaId,
-          pollingStationCode: issue.pollingStationCode.trim() || null,
-          pollingStationName: issue.pollingStationName.trim() || null,
+          pollingStationCode: issue.pollingStationCode.trim(),
+          pollingStationName: issue.pollingStationName.trim(),
           position: issue.position,
-          formNumber: fn,
+          ...(fn ? { formNumber: fn } : {}),
           delegateType: issue.delegateType,
           comment: issue.comment.trim() || null,
+          sourceCandidateId: issue.sourceCandidateId || null,
           issuedAt: issue.dateIssued ? `${issue.dateIssued}T12:00:00.000Z` : undefined,
         }),
       });
@@ -304,8 +355,6 @@ export default function ElectoralAreaFormsPage() {
         pollingStationName: '',
         dateIssued: todayDate(),
       });
-      setStationQuery('');
-      setStationHits([]);
       void loadForms();
       notifyEaPortalRefresh();
     } finally {
@@ -313,10 +362,14 @@ export default function ElectoralAreaFormsPage() {
     }
   };
 
-  const openEdit = (r: FormRow) => {
+  const openEdit = async (r: FormRow) => {
     setModal(r);
     setEditStationQuery('');
     setEditStationHits([]);
+    const stRes = await fetch(
+      `/api/ea-portal/polling-stations/list?eaPortalAreaId=${encodeURIComponent(r.electoralAreaId)}`
+    );
+    if (stRes.ok) setStationList(await stRes.json());
     setEdit({
       surname: r.surname,
       firstName: r.firstName,
@@ -360,8 +413,8 @@ export default function ElectoralAreaFormsPage() {
           middleName: edit.middleName.trim() || null,
           phone: edit.phone,
           electoralAreaId: edit.electoralAreaId,
-          pollingStationCode: edit.pollingStationCode || null,
-          pollingStationName: edit.pollingStationName || null,
+          pollingStationCode: edit.pollingStationCode.trim(),
+          pollingStationName: edit.pollingStationName.trim(),
           position: edit.position,
           formNumber: fn,
           delegateType: edit.delegateType,
@@ -395,14 +448,17 @@ export default function ElectoralAreaFormsPage() {
       <header className="ea-portal-header">
         <h1>Electoral Area form issuing</h1>
         <p>
-          Issue and register EA-level position forms — separate from the delegate nomination form system. Duplicate
-          applicants (same phone + position + area) are blocked.
+          Issue and register Electoral Area delegates — separate from the polling-station nomination system.
+          Duplicates blocked by phone + position + polling station.
         </p>
       </header>
 
       <div className="ea-portal-panel ea-form-steps">
         <div className="ea-portal-panel-header">
           <h2>Issue a form</h2>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setImportOpen(true)}>
+            + Import existing delegate
+          </button>
         </div>
         <form className="ea-portal-modal-body" onSubmit={submitIssue}>
           <div>
@@ -437,95 +493,37 @@ export default function ElectoralAreaFormsPage() {
           </div>
 
           <div>
-            <div className="ea-form-step-label">Step 2 · Polling station (optional)</div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--gray-600)', margin: '0 0 0.5rem' }}>
-              Search the delegate <strong>polling_stations</strong> table. Results are limited to stations under the
-              electoral area linked via this portal area&apos;s <em>delegate electoral code</em>.
-            </p>
+            <div className="ea-form-step-label">Step 2 · Polling station</div>
             <div className="form-group">
-              <label>Search by station name or code</label>
-              <input
-                className="input"
-                placeholder={issue.electoralAreaId ? 'Type at least 2 characters…' : 'Select an electoral area first'}
-                value={stationQuery}
-                onChange={(e) => setStationQuery(e.target.value)}
-                disabled={!issue.electoralAreaId}
-                autoComplete="off"
-              />
-              {stationSearchBusy ? (
-                <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>Searching…</span>
-              ) : null}
-            </div>
-            {issue.pollingStationCode ? (
-              <div
-                style={{
-                  marginBottom: '0.75rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  flexWrap: 'wrap',
+              <label>Polling station</label>
+              <select
+                className="select"
+                required
+                disabled={!issue.electoralAreaId || stationsLoading}
+                value={issue.pollingStationCode}
+                onChange={(e) => {
+                  const code = e.target.value;
+                  const st = stationList.find((s) => s.code === code);
+                  setIssue((x) => ({
+                    ...x,
+                    pollingStationCode: code,
+                    pollingStationName: st?.name ?? '',
+                  }));
                 }}
               >
-                <span style={{ fontSize: '0.85rem' }}>
-                  Selected: <strong>{issue.pollingStationName}</strong> ({issue.pollingStationCode})
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() =>
-                    setIssue((s) => ({ ...s, pollingStationCode: '', pollingStationName: '' }))
-                  }
-                >
-                  Clear
-                </button>
-              </div>
-            ) : null}
-            {stationHits.length > 0 ? (
-              <ul
-                style={{
-                  listStyle: 'none',
-                  padding: 0,
-                  margin: '0 0 1rem',
-                  maxHeight: '12rem',
-                  overflow: 'auto',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                }}
-              >
-                {stationHits.map((h) => (
-                  <li key={h.code} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        borderRadius: 0,
-                        border: 'none',
-                        justifyContent: 'flex-start',
-                      }}
-                      onClick={() => {
-                        setIssue((s) => ({
-                          ...s,
-                          pollingStationCode: h.code,
-                          pollingStationName: h.name,
-                        }));
-                        setStationHits([]);
-                        setStationQuery('');
-                      }}
-                    >
-                      <span>
-                        {h.name}{' '}
-                        <span style={{ color: 'var(--gray-500)' }}>({h.code})</span>
-                      </span>
-                      <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--gray-500)' }}>
-                        {h.electoralArea.name}
-                      </span>
-                    </button>
-                  </li>
+                <option value="">
+                  {stationsLoading ? 'Loading stations…' : 'Select polling station'}
+                </option>
+                {stationList.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.name}
+                  </option>
                 ))}
-              </ul>
-            ) : null}
+              </select>
+              <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>
+                Each option is a unique station (name shown; code stored internally).
+              </span>
+            </div>
           </div>
 
           <div>
@@ -533,12 +531,21 @@ export default function ElectoralAreaFormsPage() {
             <div className="grid-2">
               <div className="form-group">
                 <label>Form number</label>
+                <label className="ea-check-label" style={{ paddingTop: 0, marginBottom: '0.35rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={autoFormNumber}
+                    onChange={(e) => setAutoFormNumber(e.target.checked)}
+                  />
+                  Auto-generate
+                </label>
                 <input
                   className="input"
-                  required
+                  required={!autoFormNumber}
+                  disabled={autoFormNumber}
                   maxLength={EA_FORM_NUMBER_MAX_LEN}
                   autoComplete="off"
-                  placeholder="e.g. 1A12E7"
+                  placeholder={autoFormNumber ? 'Generated on save' : 'e.g. 1A12E7'}
                   value={issue.formNumber}
                   onChange={(e) =>
                     setIssue((x) => ({
@@ -547,9 +554,6 @@ export default function ElectoralAreaFormsPage() {
                     }))
                   }
                 />
-                <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>
-                  1–{EA_FORM_NUMBER_MAX_LEN} letters or digits
-                </span>
               </div>
               <div className="form-group">
                 <label>Phone</label>
@@ -770,7 +774,7 @@ export default function ElectoralAreaFormsPage() {
                     </td>
                     <td style={{ fontSize: '0.75rem' }}>{r.issuedBy.name}</td>
                     <td>
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => openEdit(r)}>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openEdit(r)}>
                         Edit
                       </button>
                     </td>
@@ -798,7 +802,7 @@ export default function ElectoralAreaFormsPage() {
                   className="select"
                   required
                   value={edit.electoralAreaId}
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const id = e.target.value;
                     setEdit((x) => ({
                       ...x,
@@ -806,8 +810,10 @@ export default function ElectoralAreaFormsPage() {
                       pollingStationCode: '',
                       pollingStationName: '',
                     }));
-                    setEditStationQuery('');
-                    setEditStationHits([]);
+                    const res = await fetch(
+                      `/api/ea-portal/polling-stations/list?eaPortalAreaId=${encodeURIComponent(id)}`
+                    );
+                    if (res.ok) setStationList(await res.json());
                   }}
                 >
                   {areas.map((a) => (
@@ -818,79 +824,27 @@ export default function ElectoralAreaFormsPage() {
                 </select>
               </div>
               <div className="form-group">
-                <label>Polling station (optional — search delegate DB)</label>
-                <input
-                  className="input"
-                  placeholder={edit.electoralAreaId ? 'Type at least 2 characters…' : '—'}
-                  value={editStationQuery}
-                  onChange={(e) => setEditStationQuery(e.target.value)}
-                  disabled={!edit.electoralAreaId}
-                  autoComplete="off"
-                />
-                {editStationSearchBusy ? (
-                  <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>Searching…</span>
-                ) : null}
-                {edit.pollingStationCode ? (
-                  <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.85rem' }}>
-                      Selected: <strong>{edit.pollingStationName}</strong> ({edit.pollingStationCode})
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() =>
-                        setEdit((s) => ({ ...s, pollingStationCode: '', pollingStationName: '' }))
-                      }
-                    >
-                      Clear
-                    </button>
-                  </div>
-                ) : null}
-                {editStationHits.length > 0 ? (
-                  <ul
-                    style={{
-                      listStyle: 'none',
-                      padding: 0,
-                      margin: '0.5rem 0 0',
-                      maxHeight: '10rem',
-                      overflow: 'auto',
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                    }}
-                  >
-                    {editStationHits.map((h) => (
-                      <li key={h.code} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          style={{
-                            width: '100%',
-                            textAlign: 'left',
-                            borderRadius: 0,
-                            border: 'none',
-                            justifyContent: 'flex-start',
-                          }}
-                          onClick={() => {
-                            setEdit((s) => ({
-                              ...s,
-                              pollingStationCode: h.code,
-                              pollingStationName: h.name,
-                            }));
-                            setEditStationHits([]);
-                            setEditStationQuery('');
-                          }}
-                        >
-                          <span>
-                            {h.name} <span style={{ color: 'var(--gray-500)' }}>({h.code})</span>
-                          </span>
-                          <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--gray-500)' }}>
-                            {h.electoralArea.name}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
+                <label>Polling station</label>
+                <select
+                  className="select"
+                  required
+                  value={edit.pollingStationCode}
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    const st = stationList.find((s) => s.code === code);
+                    setEdit((x) => ({
+                      ...x,
+                      pollingStationCode: code,
+                      pollingStationName: st?.name ?? x.pollingStationName,
+                    }));
+                  }}
+                >
+                  {stationList.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label>Position applied for</label>
@@ -1027,6 +981,52 @@ export default function ElectoralAreaFormsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {importOpen ? (
+        <div className="ea-portal-modal-backdrop" onClick={() => setImportOpen(false)}>
+          <div className="ea-portal-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ea-portal-modal-header">
+              <h3>Import existing delegate</h3>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setImportOpen(false)}>
+                Close
+              </button>
+            </div>
+            <div className="ea-portal-modal-body">
+              <p style={{ fontSize: '0.85rem', color: 'var(--gray-600)' }}>
+                Search the polling-station delegate database (does not modify those records).
+              </p>
+              <div className="form-group">
+                <label>Name or phone</label>
+                <input
+                  className="input"
+                  value={importQ}
+                  onChange={(e) => setImportQ(e.target.value)}
+                  placeholder="Type at least 2 characters"
+                  autoFocus
+                />
+              </div>
+              <ul style={{ listStyle: 'none', padding: 0, maxHeight: '14rem', overflow: 'auto' }}>
+                {importHits.map((h) => (
+                  <li key={h.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ width: '100%', textAlign: 'left', border: 'none', borderRadius: 0 }}
+                      onClick={() => applyImport(h)}
+                    >
+                      {h.surname} {h.firstName} · {h.phone}
+                      <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--gray-500)' }}>
+                        {h.electoralAreaName}
+                        {h.pollingStationName ? ` · ${h.pollingStationName}` : ''}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       ) : null}

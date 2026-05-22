@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
+import { needsEaPortalAreaAssignment } from '@/lib/ea-portal-user-roles';
 import { isAdminRole } from '@/lib/roles';
 import bcrypt from 'bcryptjs';
 
@@ -58,7 +59,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (eaPortalAreaIds !== undefined) {
     await prisma.userEaPortalArea.deleteMany({ where: { userId: id } });
     const effectiveRole = role ?? user.role;
-    if (effectiveRole === 'EA_OFFICER' && eaPortalAreaIds.length > 0) {
+    if (needsEaPortalAreaAssignment(effectiveRole) && eaPortalAreaIds.length > 0) {
       await prisma.userEaPortalArea.createMany({
         data: eaPortalAreaIds.map((eaPortalAreaId) => ({ userId: id, eaPortalAreaId })),
       });

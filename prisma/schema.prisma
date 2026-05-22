@@ -103,7 +103,8 @@ model User {
   // Relations
   electoralAreas     UserElectoralArea[]
   eaPortalAreas      UserEaPortalArea[]
-  eaPortalIssuedForms EaPortalIssuedForm[]
+  eaPortalIssuedForms   EaPortalIssuedForm[] @relation("EaFormIssuedBy")
+  eaPortalVerifiedForms EaPortalIssuedForm[] @relation("EaFormVerifiedBy")
 
   @@map("users")
 }
@@ -152,36 +153,44 @@ model EaPortalRecord {
   @@map("ea_portal_records")
 }
 
-/// Electoral Area **portal** form issuing — separate from delegate `Candidate` / nomination forms.
+/// Electoral Area portal delegate / form record — separate from polling-station `Candidate`.
 model EaPortalIssuedForm {
   id                   String       @id @default(cuid())
-  /// Display name: typically "First [Middle] Surname".
   fullName             String
   surname              String       @default("")
   firstName            String       @default("")
   middleName           String?
-  /// Normalized (whitespace stripped) for consistent duplicate detection.
   phone                String
   gender               String?
   address              String?
   electoralAreaId      String
   electoralArea        EaPortalArea @relation(fields: [electoralAreaId], references: [id], onDelete: Restrict)
-  pollingStationCode   String?
-  pollingStationName   String?
+  /// Required for new records; used for contest + duplicate detection.
+  pollingStationCode   String
+  pollingStationName   String
   position             String
   formNumber           String       @unique
-  /// NEW | OLD — same meaning as delegate `Candidate.delegateType`.
   delegateType         String       @default("NEW")
   comment              String?
-  status               String       @default("PENDING")
+  /// ISSUED | RETURNED | PENDING_VETTING | VERIFIED | REJECTED
+  status               String       @default("ISSUED")
+  vettingNotes         String?
+  verifiedByUserId     String?
+  verifiedBy           User?        @relation("EaFormVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+  verifiedAt           DateTime?
+  returnedAt           DateTime?
+  /// Set when imported from polling-station `Candidate` (read-only reference).
+  sourceCandidateId    String?
   issuedByUserId       String
-  issuedBy             User         @relation(fields: [issuedByUserId], references: [id], onDelete: Restrict)
+  issuedBy             User         @relation("EaFormIssuedBy", fields: [issuedByUserId], references: [id], onDelete: Restrict)
   issuedAt             DateTime     @default(now())
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
+  activities           EaPortalActivity[]
 
-  @@unique([electoralAreaId, position, phone])
+  @@unique([pollingStationCode, position, phone])
   @@index([electoralAreaId])
+  @@index([pollingStationCode])
   @@index([position])
   @@index([status])
   @@index([delegateType])
@@ -202,17 +211,20 @@ model UserEaPortalArea {
 }
 
 model EaPortalActivity {
-  id          String          @id @default(cuid())
+  id          String            @id @default(cuid())
   action      String
   details     String?
   actorUserId String?
   areaId      String?
-  area        EaPortalArea?   @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  area        EaPortalArea?       @relation(fields: [areaId], references: [id], onDelete: SetNull)
   recordId    String?
-  record      EaPortalRecord? @relation(fields: [recordId], references: [id], onDelete: SetNull)
-  createdAt   DateTime        @default(now())
+  record      EaPortalRecord?   @relation(fields: [recordId], references: [id], onDelete: SetNull)
+  formId      String?
+  form        EaPortalIssuedForm? @relation(fields: [formId], references: [id], onDelete: SetNull)
+  createdAt   DateTime          @default(now())
 
   @@index([createdAt])
+  @@index([formId])
   @@map("ea_portal_activities")
 }
 
@@ -228,4 +240,4 @@ model UserElectoralArea {
   @@map("user_electoral_areas")
 }
 
-// Role constants: SUPER_ADMIN, ADMIN, FORM_ISSUER, VETTING_PANEL
+// Role constants: SUPER_ADMIN, ADMIN, EA_PORTAL_ADMIN, EA_FORM_ISSUER, EA_VETTING_PANEL, EA_OFFICER, EA_DATA_ENTRY

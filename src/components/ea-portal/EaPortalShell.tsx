@@ -10,11 +10,11 @@ type NavItem = { href: string; label: string; exact?: boolean; matchPrefix?: str
 
 const nav: readonly NavItem[] = [
   { href: '/ea-portal', label: 'Dashboard', exact: true },
-  { href: '/ea-portal/areas', label: 'Electoral areas' },
-  { href: '/ea-portal/records', label: 'Records' },
   { href: '/electoral-area/forms', label: 'Form issuing', matchPrefix: '/electoral-area' },
-  { href: '/ea-portal/reassign', label: 'Reassign' },
+  { href: '/ea-portal/vetting', label: 'Vetting panel' },
+  { href: '/ea-portal/contests', label: 'Contests' },
   { href: '/ea-portal/reports', label: 'Reports' },
+  { href: '/ea-portal/areas', label: 'Electoral areas' },
 ];
 
 export function EaPortalShell({
@@ -77,7 +77,7 @@ export function EaPortalShell({
       <aside className="ea-portal-sidebar">
         <div className="ea-portal-brand">
           <span className="ea-portal-brand-title">EA Portal</span>
-          <span className="ea-portal-brand-sub">Area management</span>
+          <span className="ea-portal-brand-sub">Electoral Area system</span>
         </div>
         <nav className="ea-portal-nav">
           {nav.map((item) => {

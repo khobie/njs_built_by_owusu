@@ -3,12 +3,14 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
+  EA_FORM_STATUSES,
   buildEaFormFullName,
   isEaFormDelegateType,
   isEaFormPosition,
   normalizeEaFormPhone,
 } from '@/lib/ea-portal-form-constants';
-import { formsVisibleWhere, logEaPortalActivity } from '@/lib/ea-portal-access';
+import { canIssueEaForms, canVetEaDelegates, formsVisibleWhere, logEaPortalActivity } from '@/lib/ea-portal-access';
+import { findDuplicateDelegate } from '@/lib/ea-portal-delegate';
 import { assertAreaIdAllowed, requireEaPortal } from '@/lib/ea-portal-session';
 
 const formNumberSchema = z
@@ -22,13 +24,13 @@ const patchSchema = z.object({
   middleName: z.string().optional().nullable(),
   phone: z.string().min(3).optional(),
   electoralAreaId: z.string().min(1).optional(),
-  pollingStationCode: z.string().optional().nullable(),
-  pollingStationName: z.string().optional().nullable(),
+  pollingStationCode: z.string().min(1).optional(),
+  pollingStationName: z.string().min(1).optional(),
   position: z.string().min(1).optional(),
   formNumber: formNumberSchema.optional(),
   delegateType: z.enum(['NEW', 'OLD']).optional(),
   comment: z.string().optional().nullable(),
-  status: z.enum(['PENDING', 'VERIFIED', 'REJECTED']).optional(),
+  status: z.enum(EA_FORM_STATUSES).optional(),
   issuedAt: z.string().optional(),
 });
 
@@ -48,6 +50,7 @@ export async function GET(
     include: {
       electoralArea: { select: { id: true, name: true, region: true, district: true } },
       issuedBy: { select: { id: true, name: true, email: true } },
+      verifiedBy: { select: { id: true, name: true, email: true } },
     },
   });
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -60,6 +63,9 @@ export async function PATCH(
 ) {
   const gate = await requireEaPortal(request);
   if (!gate.ok) return gate.response;
+  if (!canIssueEaForms(gate.user.role) && !canVetEaDelegates(gate.user.role)) {
+    return NextResponse.json({ error: 'Not allowed to edit delegates.' }, { status: 403 });
+  }
 
   const base = formsVisibleWhere(gate.scope);
   const existing = await prisma.eaPortalIssuedForm.findFirst({
@@ -73,6 +79,8 @@ export async function PATCH(
     const nextAreaId = body.electoralAreaId ?? existing.electoralAreaId;
     const nextPosition = body.position ?? existing.position;
     const nextPhone = body.phone !== undefined ? normalizeEaFormPhone(body.phone) : existing.phone;
+    const nextPollingCode = body.pollingStationCode?.trim() ?? existing.pollingStationCode;
+    const nextPollingName = body.pollingStationName?.trim() ?? existing.pollingStationName;
 
     const nextSurname = body.surname !== undefined ? body.surname.trim() : existing.surname;
     const nextFirst = body.firstName !== undefined ? body.firstName.trim() : existing.firstName;
@@ -96,28 +104,21 @@ export async function PATCH(
       return NextResponse.json({ error: 'Name fields are required.' }, { status: 400 });
     }
 
-    if (
-      nextAreaId !== existing.electoralAreaId ||
-      nextPosition !== existing.position ||
-      nextPhone !== existing.phone
-    ) {
-      const clash = await prisma.eaPortalIssuedForm.findFirst({
-        where: {
-          electoralAreaId: nextAreaId,
-          position: nextPosition,
-          phone: nextPhone,
-          NOT: { id: existing.id },
+    const dup = await findDuplicateDelegate({
+      pollingStationCode: nextPollingCode,
+      position: nextPosition,
+      phone: nextPhone,
+      excludeId: existing.id,
+    });
+    if (dup) {
+      return NextResponse.json(
+        {
+          error:
+            'Another delegate already uses this polling station, position, and phone. Update that record instead.',
+          existingId: dup.id,
         },
-        select: { id: true },
-      });
-      if (clash) {
-        return NextResponse.json(
-          {
-            error: 'Applicant already exists for this position in this Electoral Area.',
-          },
-          { status: 409 },
-        );
-      }
+        { status: 409 }
+      );
     }
 
     if (body.formNumber !== undefined) {
@@ -140,12 +141,8 @@ export async function PATCH(
         fullName: nextFull,
         ...(body.phone !== undefined ? { phone: nextPhone } : {}),
         ...(body.electoralAreaId !== undefined ? { electoralAreaId: body.electoralAreaId } : {}),
-        ...(body.pollingStationCode !== undefined
-          ? { pollingStationCode: body.pollingStationCode?.trim() || null }
-          : {}),
-        ...(body.pollingStationName !== undefined
-          ? { pollingStationName: body.pollingStationName?.trim() || null }
-          : {}),
+        ...(body.pollingStationCode !== undefined ? { pollingStationCode: nextPollingCode } : {}),
+        ...(body.pollingStationName !== undefined ? { pollingStationName: nextPollingName } : {}),
         ...(body.position !== undefined ? { position: body.position } : {}),
         ...(body.formNumber !== undefined ? { formNumber: body.formNumber.trim() } : {}),
         ...(body.delegateType !== undefined ? { delegateType: body.delegateType } : {}),
@@ -160,9 +157,10 @@ export async function PATCH(
     });
 
     await logEaPortalActivity({
-      action: 'FORM_UPDATE',
+      action: 'DELEGATE_UPDATE',
       actorUserId: gate.user.id,
       areaId: updated.electoralAreaId,
+      formId: updated.id,
       details: `${updated.formNumber} · ${updated.fullName}`,
     });
 
@@ -177,7 +175,7 @@ export async function PATCH(
         return NextResponse.json({ error: 'Form number already in use.' }, { status: 409 });
       }
       return NextResponse.json(
-        { error: 'Applicant already exists for this position in this Electoral Area.' },
+        { error: 'Duplicate delegate for polling station, position, and phone.' },
         { status: 409 }
       );
     }

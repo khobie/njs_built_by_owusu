@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
+import { needsEaPortalAreaAssignment } from '@/lib/ea-portal-user-roles';
 import { isAdminRole } from '@/lib/roles';
 
 export async function GET(request: NextRequest) {
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (role === 'EA_OFFICER' && eaPortalAreaIds.length) {
+  if (needsEaPortalAreaAssignment(role) && eaPortalAreaIds.length) {
     await prisma.userEaPortalArea.createMany({
       data: eaPortalAreaIds.map((eaPortalAreaId) => ({ userId: created.id, eaPortalAreaId })),
     });

@@ -9,23 +9,30 @@ import {
   isEaFormPosition,
   normalizeEaFormPhone,
 } from '@/lib/ea-portal-form-constants';
-import { formsVisibleWhere, logEaPortalActivity } from '@/lib/ea-portal-access';
+import { canIssueEaForms, formsVisibleWhere, logEaPortalActivity } from '@/lib/ea-portal-access';
+import {
+  findDuplicateDelegate,
+  generateEaFormNumber,
+  normalizeEaFormStatus,
+} from '@/lib/ea-portal-delegate';
 import { assertAreaIdAllowed, requireEaPortal } from '@/lib/ea-portal-session';
 
 const listQuery = z.object({
   electoralAreaId: z.string().optional(),
+  pollingStationCode: z.string().optional(),
   position: z.string().optional(),
-  status: z.enum(['PENDING', 'VERIFIED', 'REJECTED']).optional(),
+  status: z.string().optional(),
   delegateType: z.enum(['NEW', 'OLD']).optional(),
   from: z.string().optional(),
   to: z.string().optional(),
   q: z.string().optional(),
+  contestOnly: z.enum(['1', 'true']).optional(),
 });
 
 const formNumberSchema = z
   .string()
   .trim()
-  .regex(/^[A-Za-z0-9]{1,6}$/, 'Form number must be 1–6 letters or digits (e.g. 1A12E7).');
+  .regex(/^[A-Za-z0-9]{1,6}$/, 'Form number must be 1–6 letters or digits.');
 
 const postSchema = z.object({
   surname: z.string().min(1),
@@ -33,14 +40,15 @@ const postSchema = z.object({
   middleName: z.string().optional().nullable(),
   phone: z.string().min(3),
   electoralAreaId: z.string().min(1),
-  pollingStationCode: z.string().optional().nullable(),
-  pollingStationName: z.string().optional().nullable(),
+  pollingStationCode: z.string().min(1),
+  pollingStationName: z.string().min(1),
   position: z.string().min(1),
-  formNumber: formNumberSchema,
+  formNumber: formNumberSchema.optional(),
   delegateType: z.enum(['NEW', 'OLD']),
   comment: z.string().optional().nullable(),
-  status: z.enum(['PENDING', 'VERIFIED', 'REJECTED']).optional(),
+  status: z.enum(EA_FORM_STATUSES).optional(),
   issuedAt: z.string().optional(),
+  sourceCandidateId: z.string().optional().nullable(),
 });
 
 function buildListWhere(
@@ -53,9 +61,13 @@ function buildListWhere(
   if (Object.keys(scope).length > 0) parts.push(scope);
 
   if (parsed.electoralAreaId) parts.push({ electoralAreaId: parsed.electoralAreaId });
+  if (parsed.pollingStationCode) parts.push({ pollingStationCode: parsed.pollingStationCode });
   if (parsed.position) parts.push({ position: parsed.position });
-  if (parsed.status) parts.push({ status: parsed.status });
   if (parsed.delegateType) parts.push({ delegateType: parsed.delegateType });
+  if (parsed.status) {
+    const st = parsed.status === 'PENDING' ? 'PENDING_VETTING' : parsed.status;
+    parts.push({ status: st });
+  }
 
   if (parsed.from || parsed.to) {
     const issuedAt: { gte?: Date; lte?: Date } = {};
@@ -78,6 +90,7 @@ function buildListWhere(
         { middleName: { contains: q, mode: 'insensitive' } },
         { phone: { contains: q.replace(/\s+/g, ''), mode: 'insensitive' } },
         { formNumber: { contains: q, mode: 'insensitive' } },
+        { pollingStationName: { contains: q, mode: 'insensitive' } },
         { comment: { contains: q, mode: 'insensitive' } },
       ],
     });
@@ -98,7 +111,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid query', details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const where = buildListWhere(gate.scope, parsed.data);
+  let where = buildListWhere(gate.scope, parsed.data);
+
+  if (parsed.data.contestOnly) {
+    const groups = await prisma.eaPortalIssuedForm.groupBy({
+      by: ['pollingStationCode', 'position'],
+      where,
+      _count: { _all: true },
+    });
+    const keys = new Set(
+      groups.filter((g) => g._count._all > 1).map((g) => `${g.pollingStationCode}\t${g.position}`)
+    );
+    const rows = await prisma.eaPortalIssuedForm.findMany({
+      where,
+      orderBy: { issuedAt: 'desc' },
+      take: 2000,
+      include: {
+        electoralArea: { select: { id: true, name: true, region: true } },
+        issuedBy: { select: { id: true, name: true, email: true } },
+      },
+    });
+    return NextResponse.json(
+      rows
+        .filter((r) => keys.has(`${r.pollingStationCode}\t${r.position}`))
+        .map((r) => ({ ...r, status: normalizeEaFormStatus(r.status) }))
+    );
+  }
+
   const rows = await prisma.eaPortalIssuedForm.findMany({
     where,
     orderBy: { issuedAt: 'desc' },
@@ -108,12 +147,15 @@ export async function GET(request: NextRequest) {
       issuedBy: { select: { id: true, name: true, email: true } },
     },
   });
-  return NextResponse.json(rows);
+  return NextResponse.json(rows.map((r) => ({ ...r, status: normalizeEaFormStatus(r.status) })));
 }
 
 export async function POST(request: NextRequest) {
   const gate = await requireEaPortal(request);
   if (!gate.ok) return gate.response;
+  if (!canIssueEaForms(gate.user.role)) {
+    return NextResponse.json({ error: 'Not allowed to issue forms.' }, { status: 403 });
+  }
 
   try {
     const body = postSchema.parse(await request.json());
@@ -132,24 +174,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Phone is required.' }, { status: 400 });
     }
 
-    const dup = await prisma.eaPortalIssuedForm.findFirst({
-      where: {
-        electoralAreaId: body.electoralAreaId,
-        position: body.position,
-        phone,
-      },
-      select: { id: true },
+    const pollingStationCode = body.pollingStationCode.trim();
+    const pollingStationName = body.pollingStationName.trim();
+
+    const dup = await findDuplicateDelegate({
+      pollingStationCode,
+      position: body.position,
+      phone,
     });
     if (dup) {
       return NextResponse.json(
         {
-          error: 'Applicant already exists for this position in this Electoral Area.',
+          error:
+            'A delegate already exists for this polling station, position, and phone. Edit the existing record instead.',
+          existingId: dup.id,
         },
-        { status: 409 },
+        { status: 409 }
       );
     }
 
-    const formNum = body.formNumber.trim();
+    const formNum = body.formNumber?.trim() || (await generateEaFormNumber());
     const exists = await prisma.eaPortalIssuedForm.findUnique({
       where: { formNumber: formNum },
       select: { id: true },
@@ -158,7 +202,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Form number already in use.' }, { status: 409 });
     }
 
-    const status = body.status ?? 'PENDING';
+    const status = body.status ?? 'ISSUED';
     if (!EA_FORM_STATUSES.includes(status as (typeof EA_FORM_STATUSES)[number])) {
       return NextResponse.json({ error: 'Invalid status.' }, { status: 400 });
     }
@@ -179,13 +223,14 @@ export async function POST(request: NextRequest) {
         fullName,
         phone,
         electoralAreaId: body.electoralAreaId,
-        pollingStationCode: body.pollingStationCode?.trim() || null,
-        pollingStationName: body.pollingStationName?.trim() || null,
+        pollingStationCode,
+        pollingStationName,
         position: body.position,
         formNumber: formNum,
         delegateType: body.delegateType,
         comment: body.comment?.trim() || null,
         status,
+        sourceCandidateId: body.sourceCandidateId?.trim() || null,
         issuedByUserId: gate.user.id,
         issuedAt: body.issuedAt ? new Date(body.issuedAt) : undefined,
       },
@@ -199,6 +244,7 @@ export async function POST(request: NextRequest) {
       action: 'FORM_ISSUE',
       actorUserId: gate.user.id,
       areaId: body.electoralAreaId,
+      formId: created.id,
       details: `${created.formNumber} · ${created.fullName} · ${created.position}`,
     });
 
@@ -213,7 +259,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Form number already in use.' }, { status: 409 });
       }
       return NextResponse.json(
-        { error: 'Applicant already exists for this position in this Electoral Area.' },
+        {
+          error:
+            'Duplicate delegate for this polling station, position, and phone. Update the existing record.',
+        },
         { status: 409 }
       );
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { areaFilterForScope, formsVisibleWhere } from '@/lib/ea-portal-access';
+import { areaFilterForScope } from '@/lib/ea-portal-access';
+import { buildFormsReportWhere } from '@/lib/ea-portal-reporting';
 import { requireEaPortal } from '@/lib/ea-portal-session';
 
 function csvEscape(value: string) {
@@ -22,10 +23,19 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const format = (searchParams.get('format') || 'csv').toLowerCase();
   const contestsOnly = searchParams.get('contestsOnly') === '1';
+  const unopposedOnly = searchParams.get('unopposedOnly') === '1';
   const view = (searchParams.get('view') || 'detail').toLowerCase();
 
   const areaWhere = areaFilterForScope(gate.scope);
-  const formsWhere = formsVisibleWhere(gate.scope);
+  const formsWhere = buildFormsReportWhere(gate.scope, {
+    electoralAreaId: searchParams.get('electoralAreaId') || undefined,
+    pollingStationCode: searchParams.get('pollingStationCode') || undefined,
+    position: searchParams.get('position') || undefined,
+    delegateType: searchParams.get('delegateType') || undefined,
+    status: searchParams.get('status') || undefined,
+    contestOnly: contestsOnly,
+    unopposedOnly,
+  });
 
   const areas = await prisma.eaPortalArea.findMany({
     where: areaWhere,
@@ -45,7 +55,7 @@ export async function GET(request: NextRequest) {
 
   const byKey = new Map<string, number>();
   for (const f of forms) {
-    const k = `${f.electoralAreaId}\t${f.position}`;
+    const k = `${f.pollingStationCode}\t${f.position}`;
     byKey.set(k, (byKey.get(k) ?? 0) + 1);
   }
   const contestedKeys = new Set<string>();
@@ -53,9 +63,15 @@ export async function GET(request: NextRequest) {
     if (n > 1) contestedKeys.add(k);
   }
 
-  const filtered = contestsOnly
-    ? forms.filter((f) => contestedKeys.has(`${f.electoralAreaId}\t${f.position}`))
-    : forms;
+  const filtered =
+    contestsOnly || unopposedOnly
+      ? forms.filter((f) => {
+          const k = `${f.pollingStationCode}\t${f.position}`;
+          if (contestsOnly) return contestedKeys.has(k);
+          if (unopposedOnly) return (byKey.get(k) ?? 0) === 1;
+          return true;
+        })
+      : forms;
 
   const stamp = new Date().toISOString().slice(0, 10);
 

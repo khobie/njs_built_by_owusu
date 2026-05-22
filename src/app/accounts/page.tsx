@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/dashboard/AppShell';
+import { eaPortalRoleLabel, needsEaPortalAreaAssignment } from '@/lib/ea-portal-user-roles';
 import { isAdminRole } from '@/lib/roles';
 
 type Role =
@@ -10,6 +11,8 @@ type Role =
   | 'FORM_ISSUER'
   | 'VETTING_PANEL'
   | 'EA_PORTAL_ADMIN'
+  | 'EA_FORM_ISSUER'
+  | 'EA_VETTING_PANEL'
   | 'EA_OFFICER'
   | 'EA_DATA_ENTRY';
 
@@ -117,8 +120,8 @@ export default function AccountsPage() {
     e.preventDefault();
     setSaving(true);
     setError('');
-    if (role === 'EA_OFFICER' && eaPortalAreaIds.length === 0) {
-      setError('Electoral Area Officers must be assigned to at least one EA portal area.');
+    if (needsEaPortalAreaAssignment(role) && eaPortalAreaIds.length === 0) {
+      setError('This EA portal role must be assigned to at least one electoral area.');
       setSaving(false);
       return;
     }
@@ -132,7 +135,7 @@ export default function AccountsPage() {
           password,
           role,
           areaCodes: role === 'VETTING_PANEL' ? areaCodes : [],
-          eaPortalAreaIds: role === 'EA_OFFICER' ? eaPortalAreaIds : [],
+          eaPortalAreaIds: needsEaPortalAreaAssignment(role) ? eaPortalAreaIds : [],
         }),
       });
       const data = await res.json();
@@ -364,16 +367,18 @@ export default function AccountsPage() {
                         const r = e.target.value as Role;
                         setRole(r);
                         if (r !== 'VETTING_PANEL') setAreaCodes([]);
-                        if (r !== 'EA_OFFICER') setEaPortalAreaIds([]);
+                        if (!needsEaPortalAreaAssignment(r)) setEaPortalAreaIds([]);
                       }}
                     >
                       <option value="SUPER_ADMIN">Super Admin</option>
                       <option value="ADMIN">Admin</option>
-                      <option value="FORM_ISSUER">Form Issuer</option>
-                      <option value="VETTING_PANEL">Vetting Panel</option>
-                      <option value="EA_PORTAL_ADMIN">EA Portal Admin</option>
-                      <option value="EA_OFFICER">Electoral Area Officer</option>
-                      <option value="EA_DATA_ENTRY">EA Data Entry Officer</option>
+                      <option value="FORM_ISSUER">Form Issuer (nomination)</option>
+                      <option value="VETTING_PANEL">Vetting Panel (nomination)</option>
+                      <option value="EA_PORTAL_ADMIN">EA Portal Admin (full)</option>
+                      <option value="EA_FORM_ISSUER">EA Form Issuer</option>
+                      <option value="EA_VETTING_PANEL">EA Vetting Panel</option>
+                      <option value="EA_OFFICER">EA Officer (issue + vet)</option>
+                      <option value="EA_DATA_ENTRY">EA Data Entry (full)</option>
                     </select>
                   </div>
                   {role === 'VETTING_PANEL' ? (
@@ -394,11 +399,11 @@ export default function AccountsPage() {
                     </div>
                   ) : null}
                 </div>
-                {role === 'EA_OFFICER' ? (
+                {needsEaPortalAreaAssignment(role) ? (
                   <div className="form-group">
-                    <label>EA Portal areas (separate from delegate vetting areas)</label>
+                    <label>EA Portal electoral areas</label>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>
-                      Officers only see records linked to these portal electoral areas. Pick at least one.
+                      Form issuers and vetting panel members only see delegates in these areas. Pick at least one.
                     </p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.35rem' }}>
                       {eaPortalAreasList.map((a) => (
@@ -442,7 +447,7 @@ export default function AccountsPage() {
                       <tr key={u.id}>
                         <td>{u.name}</td>
                         <td>{u.email}</td>
-                        <td>{u.role}</td>
+                        <td title={u.role}>{eaPortalRoleLabel(u.role)}</td>
                         <td>{u.electoralAreas.map((a) => a.areaCode).join(', ') || '—'}</td>
                         <td style={{ maxWidth: '14rem', fontSize: '0.85rem', verticalAlign: 'top' }}>{portalNamesForUser(u)}</td>
                         <td>{u.isActive ? 'Active' : 'Inactive'}</td>
@@ -454,9 +459,9 @@ export default function AccountsPage() {
                             <button className="btn btn-primary btn-sm" onClick={() => void changePassword(u)}>
                               Change Password
                             </button>
-                            {u.role === 'EA_OFFICER' ? (
+                            {needsEaPortalAreaAssignment(u.role) ? (
                               <button type="button" className="btn btn-secondary btn-sm" onClick={() => openEaPortalAssign(u)}>
-                                EA portal areas
+                                EA areas
                               </button>
                             ) : null}
                           </div>

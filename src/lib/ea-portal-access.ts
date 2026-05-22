@@ -7,12 +7,14 @@ export function canAccessEaPortal(role: string | null | undefined): boolean {
     role === 'SUPER_ADMIN' ||
     role === 'ADMIN' ||
     role === 'EA_PORTAL_ADMIN' ||
+    role === 'EA_FORM_ISSUER' ||
+    role === 'EA_VETTING_PANEL' ||
     role === 'EA_OFFICER' ||
     role === 'EA_DATA_ENTRY'
   );
 }
 
-/** Full CRUD across all portal areas (not scoped). */
+/** Full admin: all areas, reset, area CRUD. */
 export function hasFullEaPortalAccess(role: string | null | undefined): boolean {
   if (!role) return false;
   return (
@@ -23,15 +25,33 @@ export function hasFullEaPortalAccess(role: string | null | undefined): boolean 
   );
 }
 
+export function canIssueEaForms(role: string | null | undefined): boolean {
+  if (!role) return false;
+  return (
+    hasFullEaPortalAccess(role) ||
+    role === 'EA_FORM_ISSUER' ||
+    role === 'EA_OFFICER'
+  );
+}
+
+export function canVetEaDelegates(role: string | null | undefined): boolean {
+  if (!role) return false;
+  return (
+    hasFullEaPortalAccess(role) ||
+    role === 'EA_VETTING_PANEL' ||
+    role === 'EA_OFFICER'
+  );
+}
+
 /**
- * @returns `null` = all areas; string[] = only these EaPortalArea ids (EA_OFFICER).
+ * @returns `null` = all areas; string[] = only these EaPortalArea ids (scoped roles).
  */
 export async function getEaPortalScopeAreaIds(
   userId: string,
   role: string
 ): Promise<string[] | null> {
   if (hasFullEaPortalAccess(role)) return null;
-  if (role === 'EA_OFFICER') {
+  if (role === 'EA_OFFICER' || role === 'EA_VETTING_PANEL' || role === 'EA_FORM_ISSUER') {
     const rows = await prisma.userEaPortalArea.findMany({
       where: { userId },
       select: { eaPortalAreaId: true },
@@ -45,10 +65,10 @@ export function areaFilterForScope(
   scope: string[] | null
 ): Prisma.EaPortalAreaWhereInput | undefined {
   if (scope === null) return undefined;
+  if (scope.length === 0) return { id: { in: [] } };
   return { id: { in: scope } };
 }
 
-/** Records visible: unassigned + records in scoped areas. */
 export function recordsVisibleWhere(scope: string[] | null): Prisma.EaPortalRecordWhereInput {
   if (scope === null) return {};
   return {
@@ -56,9 +76,9 @@ export function recordsVisibleWhere(scope: string[] | null): Prisma.EaPortalReco
   };
 }
 
-/** Issued EA forms: always tied to a portal area; officers only see their areas. */
 export function formsVisibleWhere(scope: string[] | null): Prisma.EaPortalIssuedFormWhereInput {
   if (scope === null) return {};
+  if (scope.length === 0) return { electoralAreaId: { in: [] } };
   return { electoralAreaId: { in: scope } };
 }
 
@@ -68,6 +88,7 @@ export async function logEaPortalActivity(args: {
   actorUserId?: string;
   areaId?: string | null;
   recordId?: string | null;
+  formId?: string | null;
 }): Promise<void> {
   try {
     await prisma.eaPortalActivity.create({
@@ -77,6 +98,7 @@ export async function logEaPortalActivity(args: {
         actorUserId: args.actorUserId ?? null,
         areaId: args.areaId ?? null,
         recordId: args.recordId ?? null,
+        formId: args.formId ?? null,
       },
     });
   } catch (e) {

@@ -4,6 +4,8 @@ export const ROLES = [
   'FORM_ISSUER',
   'VETTING_PANEL',
   'EA_PORTAL_ADMIN',
+  'EA_FORM_ISSUER',
+  'EA_VETTING_PANEL',
   'EA_OFFICER',
   'EA_DATA_ENTRY',
 ] as const;
