@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { areaFilterForScope, logEaPortalActivity } from '@/lib/ea-portal-access';
+import { syncEaPortalAreasFromDelegate } from '@/lib/ea-portal-areas-sync';
 import { requireEaPortal } from '@/lib/ea-portal-session';
 
 const createSchema = z.object({
@@ -17,6 +18,18 @@ export async function GET(request: NextRequest) {
   if (!gate.ok) return gate.response;
 
   const where = areaFilterForScope(gate.scope);
+
+  // Portal areas are separate from delegate electoral_areas; bootstrap when empty.
+  if (gate.full) {
+    const portalCount = await prisma.eaPortalArea.count({ where });
+    if (portalCount === 0) {
+      const delegateCount = await prisma.electoralArea.count();
+      if (delegateCount > 0) {
+        await syncEaPortalAreasFromDelegate('Ghana');
+      }
+    }
+  }
+
   const areas = await prisma.eaPortalArea.findMany({
     where,
     orderBy: [{ region: 'asc' }, { district: 'asc' }, { name: 'asc' }],

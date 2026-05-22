@@ -282,6 +282,27 @@ async function main() {
     }
   }
 
+  // Mirror delegate electoral areas into EA portal areas (for form issuing dropdown).
+  const delegates = await prisma.electoralArea.findMany({ orderBy: { name: 'asc' } });
+  let portalAreasCreated = 0;
+  for (const d of delegates) {
+    const existing = await prisma.eaPortalArea.findFirst({
+      where: { delegateAreaCode: d.code },
+      select: { id: true },
+    });
+    if (existing) continue;
+    await prisma.eaPortalArea.create({
+      data: {
+        name: d.name,
+        constituency: d.name,
+        district: d.name,
+        region: 'Ghana',
+        delegateAreaCode: d.code,
+      },
+    });
+    portalAreasCreated++;
+  }
+
   // Create default admin user
   const hashedPassword = await bcrypt.hash('admin123', 10);
   await prisma.user.upsert({
@@ -339,11 +360,13 @@ async function main() {
   }
 
   const areaCount = await prisma.electoralArea.count();
+  const portalAreaCount = await prisma.eaPortalArea.count();
   const stationCount = await prisma.pollingStation.count();
   const userCount = await prisma.user.count();
 
   console.log('âœ… Seed completed successfully!');
   console.log(`   - ${areaCount} electoral areas created`);
+  console.log(`   - ${portalAreaCount} EA portal areas (${portalAreasCreated} new this run)`);
   console.log(`   - ${stationCount} polling stations created`);
   console.log(
     `   - ${userCount} users (admin/admin123 · superadmin/superadmin123 · vetting/vetting123)`,

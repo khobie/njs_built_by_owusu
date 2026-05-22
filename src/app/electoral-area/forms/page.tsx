@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import {
   EA_PORTAL_FORM_POSITIONS,
@@ -58,6 +59,8 @@ export default function ElectoralAreaFormsPage() {
   }, [toast]);
 
   const [areas, setAreas] = useState<AreaOpt[]>([]);
+  const [areasLoading, setAreasLoading] = useState(true);
+  const [areasLoadErr, setAreasLoadErr] = useState('');
   const [rows, setRows] = useState<FormRow[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [busyIssue, setBusyIssue] = useState(false);
@@ -112,15 +115,34 @@ export default function ElectoralAreaFormsPage() {
   });
 
   const loadAreas = useCallback(async () => {
-    const res = await fetch('/api/ea-portal/areas', { cache: 'no-store' });
-    if (res.ok) {
+    setAreasLoading(true);
+    setAreasLoadErr('');
+    try {
+      const res = await fetch('/api/ea-portal/areas', { cache: 'no-store' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setAreas([]);
+        setAreasLoadErr(
+          (data as { error?: string }).error ||
+            (res.status === 401 || res.status === 403
+              ? 'You do not have access to load electoral areas. Sign in with an EA portal account.'
+              : 'Could not load electoral areas.')
+        );
+        return;
+      }
       const raw: unknown[] = await res.json();
-      setAreas(
-        raw.map((x) => {
-          const a = x as AreaOpt;
-          return { id: a.id, name: a.name, region: a.region, district: a.district };
-        })
-      );
+      const list = raw.map((x) => {
+        const a = x as AreaOpt;
+        return { id: a.id, name: a.name, region: a.region, district: a.district };
+      });
+      setAreas(list);
+      if (list.length === 0) {
+        setAreasLoadErr(
+          'No electoral areas are set up yet. An admin can load them from the delegate database under EA Portal → Areas, or run database seed.'
+        );
+      }
+    } finally {
+      setAreasLoading(false);
     }
   }, []);
 
@@ -390,16 +412,27 @@ export default function ElectoralAreaFormsPage() {
               <select
                 className="select"
                 required
+                disabled={areasLoading || areas.length === 0}
                 value={issue.electoralAreaId}
                 onChange={(e) => onIssueAreaChange(e.target.value)}
               >
-                <option value="">Select electoral area</option>
+                <option value="">
+                  {areasLoading ? 'Loading electoral areas…' : 'Select electoral area'}
+                </option>
                 {areas.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name} · {a.region}
                   </option>
                 ))}
               </select>
+              {areasLoadErr ? (
+                <p style={{ fontSize: '0.8rem', color: 'var(--danger, #b91c1c)', margin: '0.5rem 0 0' }}>
+                  {areasLoadErr}{' '}
+                  <Link href="/ea-portal/areas" style={{ textDecoration: 'underline' }}>
+                    Manage areas
+                  </Link>
+                </p>
+              ) : null}
             </div>
           </div>
 

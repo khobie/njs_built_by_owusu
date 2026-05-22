@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
 import { logEaPortalActivity } from '@/lib/ea-portal-access';
+import { syncEaPortalAreasFromDelegate } from '@/lib/ea-portal-areas-sync';
 import { requireEaPortal } from '@/lib/ea-portal-session';
 
 const bodySchema = z
@@ -34,49 +34,13 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const delegates = await prisma.electoralArea.findMany({ orderBy: { name: 'asc' } });
-
-  let created = 0;
-  let skipped = 0;
-  const errors: string[] = [];
-
-  for (const d of delegates) {
-    const linked = await prisma.eaPortalArea.findFirst({
-      where: { delegateAreaCode: d.code },
-      select: { id: true },
-    });
-    if (linked) {
-      skipped++;
-      continue;
-    }
-
-    try {
-      await prisma.eaPortalArea.create({
-        data: {
-          name: d.name,
-          constituency: d.name,
-          district: d.name,
-          region: regionDefault,
-          delegateAreaCode: d.code,
-        },
-      });
-      created++;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      errors.push(`${d.code}: ${msg}`);
-    }
-  }
+  const result = await syncEaPortalAreasFromDelegate(regionDefault);
 
   await logEaPortalActivity({
     action: 'AREAS_LOAD_DELEGATE',
     actorUserId: gate.user.id,
-    details: `${created} created, ${skipped} already linked`,
+    details: `${result.created} created, ${result.skipped} already linked`,
   });
 
-  return NextResponse.json({
-    created,
-    skipped,
-    totalDelegateAreas: delegates.length,
-    errors,
-  });
+  return NextResponse.json(result);
 }
