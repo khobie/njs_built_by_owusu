@@ -1,22 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { isEaFormPosition, normalizeEaFormPhone } from '@/lib/ea-portal-form-constants';
+import { prisma } from '@/lib/prisma';
+import {
+  buildEaFormFullName,
+  isEaFormDelegateType,
+  isEaFormPosition,
+  normalizeEaFormPhone,
+} from '@/lib/ea-portal-form-constants';
 import { formsVisibleWhere, logEaPortalActivity } from '@/lib/ea-portal-access';
 import { assertAreaIdAllowed, requireEaPortal } from '@/lib/ea-portal-session';
 
+const formNumberSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9]{1,6}$/, 'Form number must be 1–6 letters or digits (e.g. 1A12E7).');
+
 const patchSchema = z.object({
-  fullName: z.string().min(1).optional(),
+  surname: z.string().min(1).optional(),
+  firstName: z.string().min(1).optional(),
+  middleName: z.string().optional().nullable(),
   phone: z.string().min(3).optional(),
-  gender: z.string().optional().nullable(),
-  address: z.string().optional().nullable(),
   electoralAreaId: z.string().min(1).optional(),
   pollingStationCode: z.string().optional().nullable(),
   pollingStationName: z.string().optional().nullable(),
   position: z.string().min(1).optional(),
-  formNumber: z.string().min(1).optional(),
-  applicantType: z.enum(['EXISTING', 'NEW']).optional(),
+  formNumber: formNumberSchema.optional(),
+  delegateType: z.enum(['NEW', 'OLD']).optional(),
+  comment: z.string().optional().nullable(),
   status: z.enum(['PENDING', 'VERIFIED', 'REJECTED']).optional(),
   issuedAt: z.string().optional(),
 });
@@ -63,14 +74,26 @@ export async function PATCH(
     const nextPosition = body.position ?? existing.position;
     const nextPhone = body.phone !== undefined ? normalizeEaFormPhone(body.phone) : existing.phone;
 
+    const nextSurname = body.surname !== undefined ? body.surname.trim() : existing.surname;
+    const nextFirst = body.firstName !== undefined ? body.firstName.trim() : existing.firstName;
+    const nextMiddle =
+      body.middleName !== undefined ? body.middleName?.trim() || null : existing.middleName;
+    const nextFull = buildEaFormFullName(nextFirst, nextMiddle, nextSurname);
+
     if (body.position !== undefined && !isEaFormPosition(body.position)) {
       return NextResponse.json({ error: 'Invalid position.' }, { status: 400 });
+    }
+    if (body.delegateType !== undefined && !isEaFormDelegateType(body.delegateType)) {
+      return NextResponse.json({ error: 'Invalid delegate type.' }, { status: 400 });
     }
     if (body.electoralAreaId !== undefined && !assertAreaIdAllowed(body.electoralAreaId, gate.scope)) {
       return NextResponse.json({ error: 'Forbidden for this electoral area.' }, { status: 403 });
     }
     if (body.phone !== undefined && !nextPhone) {
       return NextResponse.json({ error: 'Phone is required.' }, { status: 400 });
+    }
+    if (!nextFull) {
+      return NextResponse.json({ error: 'Name fields are required.' }, { status: 400 });
     }
 
     if (
@@ -111,10 +134,11 @@ export async function PATCH(
     const updated = await prisma.eaPortalIssuedForm.update({
       where: { id: existing.id },
       data: {
-        ...(body.fullName !== undefined ? { fullName: body.fullName.trim() } : {}),
+        ...(body.surname !== undefined ? { surname: nextSurname } : {}),
+        ...(body.firstName !== undefined ? { firstName: nextFirst } : {}),
+        ...(body.middleName !== undefined ? { middleName: nextMiddle } : {}),
+        fullName: nextFull,
         ...(body.phone !== undefined ? { phone: nextPhone } : {}),
-        ...(body.gender !== undefined ? { gender: body.gender?.trim() || null } : {}),
-        ...(body.address !== undefined ? { address: body.address?.trim() || null } : {}),
         ...(body.electoralAreaId !== undefined ? { electoralAreaId: body.electoralAreaId } : {}),
         ...(body.pollingStationCode !== undefined
           ? { pollingStationCode: body.pollingStationCode?.trim() || null }
@@ -124,7 +148,8 @@ export async function PATCH(
           : {}),
         ...(body.position !== undefined ? { position: body.position } : {}),
         ...(body.formNumber !== undefined ? { formNumber: body.formNumber.trim() } : {}),
-        ...(body.applicantType !== undefined ? { applicantType: body.applicantType } : {}),
+        ...(body.delegateType !== undefined ? { delegateType: body.delegateType } : {}),
+        ...(body.comment !== undefined ? { comment: body.comment?.trim() || null } : {}),
         ...(body.status !== undefined ? { status: body.status } : {}),
         ...(body.issuedAt !== undefined ? { issuedAt: new Date(body.issuedAt) } : {}),
       },

@@ -4,6 +4,8 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   EA_FORM_STATUSES,
+  buildEaFormFullName,
+  isEaFormDelegateType,
   isEaFormPosition,
   normalizeEaFormPhone,
 } from '@/lib/ea-portal-form-constants';
@@ -14,23 +16,29 @@ const listQuery = z.object({
   electoralAreaId: z.string().optional(),
   position: z.string().optional(),
   status: z.enum(['PENDING', 'VERIFIED', 'REJECTED']).optional(),
-  applicantType: z.enum(['EXISTING', 'NEW']).optional(),
+  delegateType: z.enum(['NEW', 'OLD']).optional(),
   from: z.string().optional(),
   to: z.string().optional(),
   q: z.string().optional(),
 });
 
+const formNumberSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9]{1,6}$/, 'Form number must be 1–6 letters or digits (e.g. 1A12E7).');
+
 const postSchema = z.object({
-  fullName: z.string().min(1),
+  surname: z.string().min(1),
+  firstName: z.string().min(1),
+  middleName: z.string().optional().nullable(),
   phone: z.string().min(3),
-  gender: z.string().optional().nullable(),
-  address: z.string().optional().nullable(),
   electoralAreaId: z.string().min(1),
   pollingStationCode: z.string().optional().nullable(),
   pollingStationName: z.string().optional().nullable(),
   position: z.string().min(1),
-  formNumber: z.string().min(1),
-  applicantType: z.enum(['EXISTING', 'NEW']),
+  formNumber: formNumberSchema,
+  delegateType: z.enum(['NEW', 'OLD']),
+  comment: z.string().optional().nullable(),
   status: z.enum(['PENDING', 'VERIFIED', 'REJECTED']).optional(),
   issuedAt: z.string().optional(),
 });
@@ -47,7 +55,7 @@ function buildListWhere(
   if (parsed.electoralAreaId) parts.push({ electoralAreaId: parsed.electoralAreaId });
   if (parsed.position) parts.push({ position: parsed.position });
   if (parsed.status) parts.push({ status: parsed.status });
-  if (parsed.applicantType) parts.push({ applicantType: parsed.applicantType });
+  if (parsed.delegateType) parts.push({ delegateType: parsed.delegateType });
 
   if (parsed.from || parsed.to) {
     const issuedAt: { gte?: Date; lte?: Date } = {};
@@ -65,8 +73,12 @@ function buildListWhere(
     parts.push({
       OR: [
         { fullName: { contains: q, mode: 'insensitive' } },
+        { firstName: { contains: q, mode: 'insensitive' } },
+        { surname: { contains: q, mode: 'insensitive' } },
+        { middleName: { contains: q, mode: 'insensitive' } },
         { phone: { contains: q.replace(/\s+/g, ''), mode: 'insensitive' } },
         { formNumber: { contains: q, mode: 'insensitive' } },
+        { comment: { contains: q, mode: 'insensitive' } },
       ],
     });
   }
@@ -108,6 +120,9 @@ export async function POST(request: NextRequest) {
     if (!isEaFormPosition(body.position)) {
       return NextResponse.json({ error: 'Invalid position.' }, { status: 400 });
     }
+    if (!isEaFormDelegateType(body.delegateType)) {
+      return NextResponse.json({ error: 'Invalid delegate type.' }, { status: 400 });
+    }
     if (!assertAreaIdAllowed(body.electoralAreaId, gate.scope)) {
       return NextResponse.json({ error: 'Forbidden for this electoral area.' }, { status: 403 });
     }
@@ -148,18 +163,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid status.' }, { status: 400 });
     }
 
+    const surname = body.surname.trim();
+    const firstName = body.firstName.trim();
+    const middleName = body.middleName?.trim() || null;
+    const fullName = buildEaFormFullName(firstName, middleName, surname);
+    if (!fullName) {
+      return NextResponse.json({ error: 'Name fields are required.' }, { status: 400 });
+    }
+
     const created = await prisma.eaPortalIssuedForm.create({
       data: {
-        fullName: body.fullName.trim(),
+        surname,
+        firstName,
+        middleName,
+        fullName,
         phone,
-        gender: body.gender?.trim() || null,
-        address: body.address?.trim() || null,
         electoralAreaId: body.electoralAreaId,
         pollingStationCode: body.pollingStationCode?.trim() || null,
         pollingStationName: body.pollingStationName?.trim() || null,
         position: body.position,
         formNumber: formNum,
-        applicantType: body.applicantType,
+        delegateType: body.delegateType,
+        comment: body.comment?.trim() || null,
         status,
         issuedByUserId: gate.user.id,
         issuedAt: body.issuedAt ? new Date(body.issuedAt) : undefined,

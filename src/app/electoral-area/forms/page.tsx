@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   EA_PORTAL_FORM_POSITIONS,
   EA_FORM_STATUSES,
+  EA_FORM_DELEGATE_TYPES,
+  EA_FORM_NUMBER_MAX_LEN,
+  type EaFormDelegateType,
 } from '@/lib/ea-portal-form-constants';
 import { notifyEaPortalRefresh } from '@/lib/ea-portal-refresh';
 
@@ -23,6 +26,9 @@ type PollingSearchHit = {
 type FormRow = {
   id: string;
   fullName: string;
+  surname: string;
+  firstName: string;
+  middleName: string | null;
   phone: string;
   gender: string | null;
   address: string | null;
@@ -31,7 +37,8 @@ type FormRow = {
   pollingStationName: string | null;
   position: string;
   formNumber: string;
-  applicantType: string;
+  delegateType: string;
+  comment: string | null;
   status: string;
   issuedAt: string;
   electoralArea: { id: string; name: string; region: string };
@@ -69,13 +76,14 @@ export default function ElectoralAreaFormsPage() {
     electoralAreaId: '',
     pollingStationCode: '',
     pollingStationName: '',
-    position: '',
-    fullName: '',
-    phone: '',
-    gender: '',
-    address: '',
-    applicantType: 'NEW' as 'EXISTING' | 'NEW',
     formNumber: '',
+    phone: '',
+    surname: '',
+    firstName: '',
+    middleName: '',
+    position: '',
+    delegateType: 'NEW' as EaFormDelegateType,
+    comment: '',
     dateIssued: todayDate(),
   });
 
@@ -88,16 +96,17 @@ export default function ElectoralAreaFormsPage() {
   const [editStationSearchBusy, setEditStationSearchBusy] = useState(false);
 
   const [edit, setEdit] = useState({
-    fullName: '',
+    surname: '',
+    firstName: '',
+    middleName: '',
     phone: '',
-    gender: '',
-    address: '',
     electoralAreaId: '',
     pollingStationCode: '',
     pollingStationName: '',
     position: '',
     formNumber: '',
-    applicantType: 'NEW' as 'EXISTING' | 'NEW',
+    delegateType: 'NEW' as EaFormDelegateType,
+    comment: '',
     status: 'PENDING' as (typeof EA_FORM_STATUSES)[number],
     dateIssued: todayDate(),
   });
@@ -183,7 +192,7 @@ export default function ElectoralAreaFormsPage() {
       if (fltArea) p.set('electoralAreaId', fltArea);
       if (fltPosition) p.set('position', fltPosition);
       if (fltStatus) p.set('status', fltStatus);
-      if (fltType) p.set('applicantType', fltType);
+      if (fltType) p.set('delegateType', fltType);
       if (fltFrom) p.set('from', fltFrom);
       if (fltTo) p.set('to', fltTo);
       if (fltQ.trim()) p.set('q', fltQ.trim());
@@ -219,8 +228,20 @@ export default function ElectoralAreaFormsPage() {
       setToast({ type: 'err', text: 'Select an Electoral Area (step 1).' });
       return;
     }
+    if (!issue.surname.trim() || !issue.firstName.trim()) {
+      setToast({ type: 'err', text: 'Surname and first name are required.' });
+      return;
+    }
     if (!issue.position) {
-      setToast({ type: 'err', text: 'Choose a position (step 3).' });
+      setToast({ type: 'err', text: 'Choose a position applied for.' });
+      return;
+    }
+    const fn = issue.formNumber.replace(/[^A-Za-z0-9]/g, '').slice(0, EA_FORM_NUMBER_MAX_LEN);
+    if (!/^[A-Za-z0-9]{1,6}$/.test(fn)) {
+      setToast({
+        type: 'err',
+        text: `Form number must be 1–${EA_FORM_NUMBER_MAX_LEN} letters or digits (e.g. 1A12E7).`,
+      });
       return;
     }
     setBusyIssue(true);
@@ -229,16 +250,17 @@ export default function ElectoralAreaFormsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fullName: issue.fullName.trim(),
+          surname: issue.surname.trim(),
+          firstName: issue.firstName.trim(),
+          middleName: issue.middleName.trim() || null,
           phone: issue.phone,
-          gender: issue.gender.trim() || null,
-          address: issue.address.trim() || null,
           electoralAreaId: issue.electoralAreaId,
           pollingStationCode: issue.pollingStationCode.trim() || null,
           pollingStationName: issue.pollingStationName.trim() || null,
           position: issue.position,
-          formNumber: issue.formNumber.trim(),
-          applicantType: issue.applicantType,
+          formNumber: fn,
+          delegateType: issue.delegateType,
+          comment: issue.comment.trim() || null,
           issuedAt: issue.dateIssued ? `${issue.dateIssued}T12:00:00.000Z` : undefined,
         }),
       });
@@ -250,11 +272,12 @@ export default function ElectoralAreaFormsPage() {
       setToast({ type: 'ok', text: 'Form issued successfully.' });
       setIssue({
         ...issue,
-        fullName: '',
-        phone: '',
-        gender: '',
-        address: '',
         formNumber: '',
+        phone: '',
+        surname: '',
+        firstName: '',
+        middleName: '',
+        comment: '',
         pollingStationCode: '',
         pollingStationName: '',
         dateIssued: todayDate(),
@@ -273,16 +296,17 @@ export default function ElectoralAreaFormsPage() {
     setEditStationQuery('');
     setEditStationHits([]);
     setEdit({
-      fullName: r.fullName,
+      surname: r.surname,
+      firstName: r.firstName,
+      middleName: r.middleName ?? '',
       phone: r.phone,
-      gender: r.gender ?? '',
-      address: r.address ?? '',
       electoralAreaId: r.electoralAreaId,
       pollingStationCode: r.pollingStationCode ?? '',
       pollingStationName: r.pollingStationName ?? '',
       position: r.position,
       formNumber: r.formNumber,
-      applicantType: r.applicantType as 'EXISTING' | 'NEW',
+      delegateType: (r.delegateType === 'OLD' ? 'OLD' : 'NEW') as EaFormDelegateType,
+      comment: r.comment ?? '',
       status: r.status as (typeof EA_FORM_STATUSES)[number],
       dateIssued: r.issuedAt.slice(0, 10),
     });
@@ -291,22 +315,35 @@ export default function ElectoralAreaFormsPage() {
   const saveEdit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!modal) return;
+    if (!edit.surname.trim() || !edit.firstName.trim()) {
+      setToast({ type: 'err', text: 'Surname and first name are required.' });
+      return;
+    }
+    const fn = edit.formNumber.replace(/[^A-Za-z0-9]/g, '').slice(0, EA_FORM_NUMBER_MAX_LEN);
+    if (!/^[A-Za-z0-9]{1,6}$/.test(fn)) {
+      setToast({
+        type: 'err',
+        text: `Form number must be 1–${EA_FORM_NUMBER_MAX_LEN} letters or digits (e.g. 1A12E7).`,
+      });
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`/api/ea-portal/forms/${modal.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fullName: edit.fullName.trim(),
+          surname: edit.surname.trim(),
+          firstName: edit.firstName.trim(),
+          middleName: edit.middleName.trim() || null,
           phone: edit.phone,
-          gender: edit.gender.trim() || null,
-          address: edit.address.trim() || null,
           electoralAreaId: edit.electoralAreaId,
           pollingStationCode: edit.pollingStationCode || null,
           pollingStationName: edit.pollingStationName || null,
           position: edit.position,
-          formNumber: edit.formNumber.trim(),
-          applicantType: edit.applicantType,
+          formNumber: fn,
+          delegateType: edit.delegateType,
+          comment: edit.comment.trim() || null,
           status: edit.status,
           issuedAt: edit.dateIssued ? `${edit.dateIssued}T12:00:00.000Z` : undefined,
         }),
@@ -356,7 +393,7 @@ export default function ElectoralAreaFormsPage() {
                 value={issue.electoralAreaId}
                 onChange={(e) => onIssueAreaChange(e.target.value)}
               >
-                <option value="">— Select —</option>
+                <option value="">Select electoral area</option>
                 {areas.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name} · {a.region}
@@ -459,100 +496,135 @@ export default function ElectoralAreaFormsPage() {
           </div>
 
           <div>
-            <div className="ea-form-step-label">Step 3 · Position</div>
-            <div className="form-group">
-              <label>Position applying for</label>
-              <select
-                className="select"
-                required
-                value={issue.position}
-                onChange={(e) => setIssue((x) => ({ ...x, position: e.target.value }))}
-              >
-                <option value="">— Select —</option>
-                {EA_PORTAL_FORM_POSITIONS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <div className="ea-form-step-label">Step 4 · Applicant</div>
-            <div className="grid-3">
+            <div className="ea-form-step-label">Step 3 · Form number &amp; phone</div>
+            <div className="grid-2">
               <div className="form-group">
-                <label>Full name</label>
+                <label>Form number</label>
                 <input
                   className="input"
                   required
-                  value={issue.fullName}
-                  onChange={(e) => setIssue((x) => ({ ...x, fullName: e.target.value }))}
+                  maxLength={EA_FORM_NUMBER_MAX_LEN}
+                  autoComplete="off"
+                  placeholder="e.g. 1A12E7"
+                  value={issue.formNumber}
+                  onChange={(e) =>
+                    setIssue((x) => ({
+                      ...x,
+                      formNumber: e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, EA_FORM_NUMBER_MAX_LEN),
+                    }))
+                  }
                 />
+                <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>
+                  1–{EA_FORM_NUMBER_MAX_LEN} letters or digits
+                </span>
               </div>
               <div className="form-group">
                 <label>Phone</label>
                 <input
                   className="input"
                   required
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="e.g. 0241234567"
                   value={issue.phone}
                   onChange={(e) => setIssue((x) => ({ ...x, phone: e.target.value }))}
                 />
               </div>
-              <div className="form-group">
-                <label>Gender (optional)</label>
-                <input
-                  className="input"
-                  value={issue.gender}
-                  onChange={(e) => setIssue((x) => ({ ...x, gender: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Address (optional)</label>
-              <input
-                className="input"
-                value={issue.address}
-                onChange={(e) => setIssue((x) => ({ ...x, address: e.target.value }))}
-              />
             </div>
           </div>
 
           <div>
-            <div className="ea-form-step-label">Step 5 · Form details</div>
+            <div className="ea-form-step-label">Step 4 · Applicant name</div>
             <div className="grid-3">
               <div className="form-group">
-                <label>Form / serial number</label>
+                <label>Surname</label>
                 <input
                   className="input"
                   required
-                  value={issue.formNumber}
-                  onChange={(e) => setIssue((x) => ({ ...x, formNumber: e.target.value }))}
+                  value={issue.surname}
+                  onChange={(e) => setIssue((x) => ({ ...x, surname: e.target.value }))}
                 />
               </div>
               <div className="form-group">
-                <label>Date issued</label>
+                <label>First name</label>
                 <input
                   className="input"
-                  type="date"
                   required
-                  value={issue.dateIssued}
-                  onChange={(e) => setIssue((x) => ({ ...x, dateIssued: e.target.value }))}
+                  value={issue.firstName}
+                  onChange={(e) => setIssue((x) => ({ ...x, firstName: e.target.value }))}
                 />
               </div>
               <div className="form-group">
-                <label>Applicant type</label>
+                <label>Middle name</label>
+                <input
+                  className="input"
+                  value={issue.middleName}
+                  onChange={(e) => setIssue((x) => ({ ...x, middleName: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="ea-form-step-label">Step 5 · Position &amp; delegate type</div>
+            <div className="grid-2">
+              <div className="form-group">
+                <label>Position applied for</label>
                 <select
                   className="select"
-                  value={issue.applicantType}
-                  onChange={(e) =>
-                    setIssue((x) => ({ ...x, applicantType: e.target.value as 'EXISTING' | 'NEW' }))
-                  }
+                  required
+                  value={issue.position}
+                  onChange={(e) => setIssue((x) => ({ ...x, position: e.target.value }))}
                 >
-                  <option value="NEW">New applicant</option>
-                  <option value="EXISTING">Existing member</option>
+                  <option value="">Select position</option>
+                  {EA_PORTAL_FORM_POSITIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
                 </select>
               </div>
+              <div className="form-group">
+                <label>Delegate type</label>
+                <select
+                  className="select"
+                  required
+                  value={issue.delegateType}
+                  onChange={(e) =>
+                    setIssue((x) => ({ ...x, delegateType: e.target.value as EaFormDelegateType }))
+                  }
+                >
+                  {EA_FORM_DELEGATE_TYPES.map((dt) => (
+                    <option key={dt} value={dt}>
+                      {dt === 'NEW' ? 'New delegate' : 'Old delegate'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="ea-form-step-label">Step 6 · Comment &amp; issue date</div>
+            <div className="form-group">
+              <label>Comment</label>
+              <textarea
+                className="input"
+                rows={3}
+                placeholder="Optional notes"
+                value={issue.comment}
+                onChange={(e) => setIssue((x) => ({ ...x, comment: e.target.value }))}
+              />
+            </div>
+            <div className="form-group">
+              <label>Date issued</label>
+              <input
+                className="input"
+                type="date"
+                required
+                value={issue.dateIssued}
+                onChange={(e) => setIssue((x) => ({ ...x, dateIssued: e.target.value }))}
+              />
             </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--gray-500)', margin: 0 }}>
               Issued by: your logged-in account (recorded automatically on save).
@@ -605,12 +677,12 @@ export default function ElectoralAreaFormsPage() {
               ))}
             </select>
           </div>
-          <div className="form-group" style={{ minWidth: '120px' }}>
-            <label>Applicant type</label>
+          <div className="form-group" style={{ minWidth: '140px' }}>
+            <label>Delegate type</label>
             <select className="select" value={fltType} onChange={(e) => setFltType(e.target.value)}>
               <option value="">All</option>
-              <option value="NEW">New</option>
-              <option value="EXISTING">Existing</option>
+              <option value="NEW">New delegate</option>
+              <option value="OLD">Old delegate</option>
             </select>
           </div>
           <div className="form-group" style={{ minWidth: '120px' }}>
@@ -625,7 +697,7 @@ export default function ElectoralAreaFormsPage() {
             <label>Search</label>
             <input
               className="input"
-              placeholder="Name, phone, form #"
+              placeholder="Name, phone, form #, comment"
               value={fltQ}
               onChange={(e) => setFltQ(e.target.value)}
             />
@@ -643,7 +715,7 @@ export default function ElectoralAreaFormsPage() {
                   <th>Phone</th>
                   <th>Area</th>
                   <th>Position</th>
-                  <th>Type</th>
+                  <th>Delegate</th>
                   <th>Status</th>
                   <th>Issued</th>
                   <th>By</th>
@@ -658,7 +730,7 @@ export default function ElectoralAreaFormsPage() {
                     <td>{r.phone}</td>
                     <td>{r.electoralArea.name}</td>
                     <td style={{ fontSize: '0.8rem' }}>{r.position}</td>
-                    <td>{r.applicantType === 'EXISTING' ? 'Existing' : 'New'}</td>
+                    <td>{r.delegateType === 'OLD' ? 'Old delegate' : 'New delegate'}</td>
                     <td>{r.status}</td>
                     <td style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
                       {new Date(r.issuedAt).toLocaleDateString()}
@@ -788,7 +860,7 @@ export default function ElectoralAreaFormsPage() {
                 ) : null}
               </div>
               <div className="form-group">
-                <label>Position</label>
+                <label>Position applied for</label>
                 <select
                   className="select"
                   required
@@ -802,56 +874,64 @@ export default function ElectoralAreaFormsPage() {
                   ))}
                 </select>
               </div>
-              <div className="grid-2">
+              <div className="grid-3">
                 <div className="form-group">
-                  <label>Full name</label>
+                  <label>Surname</label>
                   <input
                     className="input"
                     required
-                    value={edit.fullName}
-                    onChange={(e) => setEdit((x) => ({ ...x, fullName: e.target.value }))}
+                    value={edit.surname}
+                    onChange={(e) => setEdit((x) => ({ ...x, surname: e.target.value }))}
                   />
                 </div>
+                <div className="form-group">
+                  <label>First name</label>
+                  <input
+                    className="input"
+                    required
+                    value={edit.firstName}
+                    onChange={(e) => setEdit((x) => ({ ...x, firstName: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Middle name</label>
+                  <input
+                    className="input"
+                    value={edit.middleName}
+                    onChange={(e) => setEdit((x) => ({ ...x, middleName: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="grid-2">
                 <div className="form-group">
                   <label>Phone</label>
                   <input
                     className="input"
                     required
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="e.g. 0241234567"
                     value={edit.phone}
                     onChange={(e) => setEdit((x) => ({ ...x, phone: e.target.value }))}
                   />
                 </div>
-              </div>
-              <div className="grid-2">
                 <div className="form-group">
-                  <label>Gender</label>
-                  <input
-                    className="input"
-                    value={edit.gender}
-                    onChange={(e) => setEdit((x) => ({ ...x, gender: e.target.value }))}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Applicant type</label>
+                  <label>Delegate type</label>
                   <select
                     className="select"
-                    value={edit.applicantType}
+                    required
+                    value={edit.delegateType}
                     onChange={(e) =>
-                      setEdit((x) => ({ ...x, applicantType: e.target.value as 'EXISTING' | 'NEW' }))
+                      setEdit((x) => ({ ...x, delegateType: e.target.value as EaFormDelegateType }))
                     }
                   >
-                    <option value="NEW">New applicant</option>
-                    <option value="EXISTING">Existing member</option>
+                    {EA_FORM_DELEGATE_TYPES.map((dt) => (
+                      <option key={dt} value={dt}>
+                        {dt === 'NEW' ? 'New delegate' : 'Old delegate'}
+                      </option>
+                    ))}
                   </select>
                 </div>
-              </div>
-              <div className="form-group">
-                <label>Address</label>
-                <input
-                  className="input"
-                  value={edit.address}
-                  onChange={(e) => setEdit((x) => ({ ...x, address: e.target.value }))}
-                />
               </div>
               <div className="grid-2">
                 <div className="form-group">
@@ -859,8 +939,16 @@ export default function ElectoralAreaFormsPage() {
                   <input
                     className="input"
                     required
+                    maxLength={EA_FORM_NUMBER_MAX_LEN}
+                    autoComplete="off"
+                    placeholder="e.g. 1A12E7"
                     value={edit.formNumber}
-                    onChange={(e) => setEdit((x) => ({ ...x, formNumber: e.target.value }))}
+                    onChange={(e) =>
+                      setEdit((x) => ({
+                        ...x,
+                        formNumber: e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, EA_FORM_NUMBER_MAX_LEN),
+                      }))
+                    }
                   />
                 </div>
                 <div className="form-group">
@@ -873,6 +961,16 @@ export default function ElectoralAreaFormsPage() {
                     onChange={(e) => setEdit((x) => ({ ...x, dateIssued: e.target.value }))}
                   />
                 </div>
+              </div>
+              <div className="form-group">
+                <label>Comment</label>
+                <textarea
+                  className="input"
+                  rows={3}
+                  placeholder="Optional notes"
+                  value={edit.comment}
+                  onChange={(e) => setEdit((x) => ({ ...x, comment: e.target.value }))}
+                />
               </div>
               <div className="form-group">
                 <label>Status</label>

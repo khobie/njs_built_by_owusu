@@ -155,7 +155,11 @@ model EaPortalRecord {
 /// Electoral Area **portal** form issuing — separate from delegate `Candidate` / nomination forms.
 model EaPortalIssuedForm {
   id                   String       @id @default(cuid())
+  /// Display name: typically "First [Middle] Surname".
   fullName             String
+  surname              String       @default("")
+  firstName            String       @default("")
+  middleName           String?
   /// Normalized (whitespace stripped) for consistent duplicate detection.
   phone                String
   gender               String?
@@ -166,7 +170,9 @@ model EaPortalIssuedForm {
   pollingStationName   String?
   position             String
   formNumber           String       @unique
-  applicantType        String
+  /// NEW | OLD — same meaning as delegate `Candidate.delegateType`.
+  delegateType         String       @default("NEW")
+  comment              String?
   status               String       @default("PENDING")
   issuedByUserId       String
   issuedBy             User         @relation(fields: [issuedByUserId], references: [id], onDelete: Restrict)
@@ -178,7 +184,7 @@ model EaPortalIssuedForm {
   @@index([electoralAreaId])
   @@index([position])
   @@index([status])
-  @@index([applicantType])
+  @@index([delegateType])
   @@index([issuedAt])
   @@map("ea_portal_issued_forms")
 }

@@ -20,6 +20,8 @@ export default function EaPortalAreasPage() {
   const [modal, setModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [full, setFull] = useState(false);
+  const [loadBusy, setLoadBusy] = useState(false);
+  const [loadRegion, setLoadRegion] = useState('Ghana');
   const [form, setForm] = useState({
     name: '',
     constituency: '',
@@ -79,6 +81,38 @@ export default function EaPortalAreasPage() {
     }
   };
 
+  const loadFromDelegateDb = async () => {
+    if (
+      !window.confirm(
+        'Load electoral areas from the delegate database? A portal row will be created for each delegate electoral area that is not already linked (delegate code). Constituency and district start as the area name; you can edit them on each area after import.'
+      )
+    ) {
+      return;
+    }
+    setLoadBusy(true);
+    setErr('');
+    try {
+      const res = await fetch('/api/ea-portal/areas/import-from-delegate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ region: loadRegion.trim() || 'Ghana' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErr(data?.error || 'Import failed');
+        return;
+      }
+      alert(
+        `Done. Created ${data.created}, skipped ${data.skipped} (already linked). Delegate areas: ${data.totalDelegateAreas}.` +
+          (data.errors?.length ? `\nErrors: ${data.errors.slice(0, 5).join('; ')}` : '')
+      );
+      await load();
+      notifyEaPortalRefresh();
+    } finally {
+      setLoadBusy(false);
+    }
+  };
+
   return (
     <>
       <header className="ea-portal-header">
@@ -87,11 +121,31 @@ export default function EaPortalAreasPage() {
       </header>
       {err ? <div className="error">{err}</div> : null}
 
-      <div className="ea-portal-actions" style={{ marginBottom: '1rem' }}>
+      <div className="ea-portal-actions" style={{ marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
         {full && (
-          <button type="button" className="btn btn-primary" onClick={() => setModal(true)}>
-            New area
-          </button>
+          <>
+            <button type="button" className="btn btn-primary" onClick={() => setModal(true)}>
+              New area
+            </button>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+              <label style={{ fontSize: '0.85rem', color: 'var(--gray-600)' }}>Region for import</label>
+              <input
+                className="input"
+                style={{ width: '10rem' }}
+                value={loadRegion}
+                onChange={(e) => setLoadRegion(e.target.value)}
+                title="Applied to all rows created from the delegate electoral_areas table"
+              />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={loadBusy}
+                onClick={() => void loadFromDelegateDb()}
+              >
+                {loadBusy ? 'Loading…' : 'Load electorals from delegate DB'}
+              </button>
+            </span>
+          </>
         )}
         <button type="button" className="btn btn-secondary" onClick={() => void load()}>
           Refresh
