@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { areaFilterForScope, logEaPortalActivity } from '@/lib/ea-portal-access';
 import { syncEaPortalAreasFromDelegate } from '@/lib/ea-portal-areas-sync';
+import { sortByKoforiduaAreaOrder } from '@/lib/koforidua-electoral-areas';
+import { syncKoforiduaElectoralAreas } from '@/lib/koforidua-electoral-areas-sync';
 import { requireEaPortal } from '@/lib/ea-portal-session';
 
 const createSchema = z.object({
@@ -19,8 +21,9 @@ export async function GET(request: NextRequest) {
 
   const where = areaFilterForScope(gate.scope);
 
-  // Portal areas are separate from delegate electoral_areas; bootstrap when empty.
+  // Keep portal + delegate areas aligned with the canonical 34-area list.
   if (gate.full) {
+    await syncKoforiduaElectoralAreas('Ghana');
     const portalCount = await prisma.eaPortalArea.count({ where });
     if (portalCount === 0) {
       const delegateCount = await prisma.electoralArea.count();
@@ -32,12 +35,11 @@ export async function GET(request: NextRequest) {
 
   const areas = await prisma.eaPortalArea.findMany({
     where,
-    orderBy: [{ region: 'asc' }, { district: 'asc' }, { name: 'asc' }],
     include: {
       _count: { select: { records: true, userLinks: true } },
     },
   });
-  return NextResponse.json(areas);
+  return NextResponse.json(sortByKoforiduaAreaOrder(areas));
 }
 
 export async function POST(request: NextRequest) {
