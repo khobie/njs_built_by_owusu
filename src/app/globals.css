@@ -1946,6 +1946,67 @@ tr.editing-row:hover {
   margin-bottom: 0.35rem;
 }
 
+.ea-form-issue-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (min-width: 1120px) {
+  .ea-form-issue-layout {
+    grid-template-columns: minmax(300px, 400px) 1fr;
+  }
+}
+
+.ea-form-issue-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.ea-status-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.ea-status-issued {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.ea-status-pending {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.ea-status-verified {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.ea-status-rejected {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.ea-status-returned {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.input.ea-form-number-preview {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #14532d;
+  cursor: default;
+}
+
 .ea-portal-cards-dense {
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }
@@ -2013,6 +2074,265 @@ tr.editing-row:hover {
   font-weight: 600;
   min-width: 1.5rem;
   text-align: right;
+}
+
+/* EA Reports — modern analytics layout */
+.ea-reports-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 55%, #1e40af 100%);
+  color: #f8fafc;
+  border-radius: 14px;
+  padding: 1.35rem 1.5rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+}
+
+.ea-reports-hero h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.ea-reports-hero p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  max-width: 42rem;
+  line-height: 1.5;
+}
+
+.ea-reports-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.ea-reports-hero .btn-primary {
+  background: #f8fafc;
+  color: #0f172a;
+  border: none;
+}
+
+.ea-reports-hero .btn-secondary {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.ea-reports-filter-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.ea-reports-filter-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.ea-reports-filter-head h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ea-reports-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+}
+
+.ea-reports-chip {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.ea-reports-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.ea-reports-kpi {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.ea-reports-kpi::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--ea-kpi-accent, #3b82f6);
+}
+
+.ea-reports-kpi-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.ea-reports-kpi-value {
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 0.25rem;
+  line-height: 1.1;
+}
+
+.ea-reports-kpi-sub {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.2rem;
+}
+
+.ea-reports-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 0.25rem;
+  background: #f1f5f9;
+  border-radius: 10px;
+  width: fit-content;
+}
+
+.ea-reports-tab {
+  border: none;
+  background: transparent;
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.ea-reports-tab.active {
+  background: #fff;
+  color: #1e40af;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+
+.ea-reports-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.ea-reports-status-stack {
+  padding: 0.85rem 1rem 1rem;
+}
+
+.ea-reports-status-row {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr 2.5rem 2.5rem;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.55rem;
+  font-size: 0.8rem;
+}
+
+.ea-reports-status-bar {
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.ea-reports-status-fill {
+  height: 100%;
+  border-radius: 5px;
+  min-width: 2px;
+}
+
+.ea-reports-contest-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 0.5rem;
+  background: #fafafa;
+}
+
+.ea-reports-contest-card strong {
+  display: block;
+  font-size: 0.85rem;
+  color: #0f172a;
+}
+
+.ea-reports-contest-card span {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.ea-reports-contest-badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #b45309;
+  white-space: nowrap;
+}
+
+.ea-reports-export-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.15rem;
+  background: linear-gradient(180deg, #f8fafc, #fff);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  margin-top: 1rem;
+}
+
+.ea-reports-meta {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-bottom: 1rem;
+}
+
+.ea-reports-table-compact .ea-portal-table th,
+.ea-reports-table-compact .ea-portal-table td {
+  padding: 0.45rem 0.55rem;
+  font-size: 0.8rem;
+}
+
+.ea-reports-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #64748b;
+  font-size: 0.9rem;
 }
 
 .ea-activity-list {

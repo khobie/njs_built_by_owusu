@@ -2,7 +2,38 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { canIssueEaForms } from '@/lib/ea-portal-access';
+import { mapCandidateRowToImportPayload } from '@/lib/ea-delegate-import';
 import { requireEaPortal } from '@/lib/ea-portal-session';
+
+const candidateImportSelect = {
+  id: true,
+  formNumber: true,
+  surname: true,
+  firstName: true,
+  middleName: true,
+  phoneNumber: true,
+  delegateType: true,
+  position: true,
+  comment: true,
+  age: true,
+  status: true,
+  verificationStatus: true,
+  contestStatus: true,
+  pollingStationCode: true,
+  createdAt: true,
+  pollingStation: { select: { name: true } },
+  electoralArea: { select: { name: true, code: true } },
+  reports: {
+    select: { content: true, reportType: true, authorName: true },
+    orderBy: { createdAt: 'desc' as const },
+    take: 10,
+  },
+  vettingQuestions: {
+    select: { question: true, notes: true, response: true },
+    orderBy: { verifiedAt: 'desc' as const },
+    take: 25,
+  },
+} satisfies Prisma.CandidateSelect;
 
 /** Search polling-station Candidates for import into EA portal (does not modify Candidate rows). */
 export async function GET(request: NextRequest) {
@@ -13,6 +44,17 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
+  const candidateId = (searchParams.get('candidateId') || '').trim();
+
+  if (candidateId) {
+    const row = await prisma.candidate.findUnique({
+      where: { id: candidateId },
+      select: candidateImportSelect,
+    });
+    if (!row) return NextResponse.json({ error: 'Delegate not found.' }, { status: 404 });
+    return NextResponse.json(mapCandidateRowToImportPayload(row));
+  }
+
   const q = (searchParams.get('q') || '').trim();
   const electoralAreaId = (searchParams.get('electoralAreaId') || '').trim();
   const pollingStationCode = (searchParams.get('pollingStationCode') || '').trim();
@@ -28,8 +70,10 @@ export async function GET(request: NextRequest) {
       OR: [
         { surname: { contains: q, mode: 'insensitive' } },
         { firstName: { contains: q, mode: 'insensitive' } },
+        { middleName: { contains: q, mode: 'insensitive' } },
         { phoneNumber: { contains: q.replace(/\s+/g, ''), mode: 'insensitive' } },
         { formNumber: { contains: q, mode: 'insensitive' } },
+        { comment: { contains: q, mode: 'insensitive' } },
       ],
     });
   }
@@ -59,34 +103,8 @@ export async function GET(request: NextRequest) {
     where,
     take: 30,
     orderBy: [{ surname: 'asc' }, { firstName: 'asc' }],
-    select: {
-      id: true,
-      formNumber: true,
-      surname: true,
-      firstName: true,
-      middleName: true,
-      phoneNumber: true,
-      delegateType: true,
-      position: true,
-      pollingStationCode: true,
-      pollingStation: { select: { name: true } },
-      electoralArea: { select: { name: true, code: true } },
-    },
+    select: candidateImportSelect,
   });
 
-  return NextResponse.json(
-    rows.map((c) => ({
-      id: c.id,
-      formNumber: c.formNumber,
-      surname: c.surname,
-      firstName: c.firstName,
-      middleName: c.middleName,
-      phone: c.phoneNumber,
-      delegateType: c.delegateType,
-      position: c.position,
-      pollingStationCode: c.pollingStationCode,
-      pollingStationName: c.pollingStation?.name ?? null,
-      electoralAreaName: c.electoralArea.name,
-    }))
-  );
+  return NextResponse.json(rows.map(mapCandidateRowToImportPayload));
 }

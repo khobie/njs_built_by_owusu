@@ -29,10 +29,12 @@ export async function GET(request: NextRequest) {
   const areaWhere = areaFilterForScope(gate.scope);
   const formsWhere = buildFormsReportWhere(gate.scope, {
     electoralAreaId: searchParams.get('electoralAreaId') || undefined,
-    pollingStationCode: searchParams.get('pollingStationCode') || undefined,
     position: searchParams.get('position') || undefined,
     delegateType: searchParams.get('delegateType') || undefined,
     status: searchParams.get('status') || undefined,
+    from: searchParams.get('from') || undefined,
+    to: searchParams.get('to') || undefined,
+    q: searchParams.get('q') || undefined,
     contestOnly: contestsOnly,
     unopposedOnly,
   });
@@ -212,8 +214,6 @@ export async function GET(request: NextRequest) {
       'comment',
       'electoralArea',
       'region',
-      'pollingStationCode',
-      'pollingStationName',
       'position',
       'status',
       'issuedAt',
@@ -237,8 +237,6 @@ export async function GET(request: NextRequest) {
         f.comment ?? '',
         f.electoralArea.name,
         f.electoralArea.region,
-        f.pollingStationCode ?? '',
-        f.pollingStationName ?? '',
         f.position,
         f.status,
         f.issuedAt.toISOString(),

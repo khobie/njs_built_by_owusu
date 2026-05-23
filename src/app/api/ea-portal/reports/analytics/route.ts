@@ -9,10 +9,12 @@ export async function GET(request: NextRequest) {
   const sp = new URL(request.url).searchParams;
   const payload = await buildEaPortalReportPayload(gate.scope, {
     electoralAreaId: sp.get('electoralAreaId') || undefined,
-    pollingStationCode: sp.get('pollingStationCode') || undefined,
     position: sp.get('position') || undefined,
     delegateType: sp.get('delegateType') || undefined,
     status: sp.get('status') || undefined,
+    from: sp.get('from') || undefined,
+    to: sp.get('to') || undefined,
+    q: sp.get('q') || undefined,
     contestOnly: sp.get('contestOnly') === '1',
     unopposedOnly: sp.get('unopposedOnly') === '1',
   });

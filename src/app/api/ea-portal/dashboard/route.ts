@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import type { Prisma } from '@prisma/client';
 import { areaFilterForScope, formsVisibleWhere } from '@/lib/ea-portal-access';
 import { countContestSlots } from '@/lib/ea-portal-delegate';
 import { friendlyDbError } from '@/lib/friendly-db-error';
@@ -10,14 +9,6 @@ function statusCount(rows: { status: string; _count: { _all: number } }[], ...ke
   return keys.reduce((n, k) => n + (rows.find((x) => x.status === k)?._count._all ?? 0), 0);
 }
 
-function activityWhereForScope(scope: string[] | null): Prisma.EaPortalActivityWhereInput | undefined {
-  if (scope === null) return undefined;
-  if (scope.length === 0) return { id: { in: [] } };
-  return {
-    OR: [{ areaId: { in: scope } }, { form: { electoralAreaId: { in: scope } } }],
-  };
-}
-
 export async function GET(request: NextRequest) {
   try {
     const gate = await requireEaPortal(request);
@@ -25,19 +16,9 @@ export async function GET(request: NextRequest) {
 
     const formsBase = formsVisibleWhere(gate.scope);
     const areaWhere = areaFilterForScope(gate.scope);
-    const activityWhere = activityWhereForScope(gate.scope);
 
-    const [
-      areaCount,
-      formsTotal,
-      byStatus,
-      byDelegateType,
-      byArea,
-      byPosition,
-      recentForms,
-      recentActivity,
-      contestStats,
-    ] = await Promise.all([
+    const [areaCount, formsTotal, byStatus, byDelegateType, byArea, byPosition, contestStats] =
+      await Promise.all([
       prisma.eaPortalArea.count({ where: areaWhere }),
       prisma.eaPortalIssuedForm.count({ where: formsBase }),
       prisma.eaPortalIssuedForm.groupBy({
@@ -64,35 +45,6 @@ export async function GET(request: NextRequest) {
         by: ['position'],
         where: formsBase,
         _count: { _all: true },
-      }),
-      prisma.eaPortalIssuedForm.findMany({
-        where: formsBase,
-        orderBy: { issuedAt: 'desc' },
-        take: 12,
-        select: {
-          id: true,
-          fullName: true,
-          position: true,
-          formNumber: true,
-          status: true,
-          delegateType: true,
-          issuedAt: true,
-          electoralArea: { select: { id: true, name: true } },
-          pollingStationName: true,
-        },
-      }),
-      prisma.eaPortalActivity.findMany({
-        where: activityWhere,
-        orderBy: { createdAt: 'desc' },
-        take: 20,
-        select: {
-          id: true,
-          action: true,
-          details: true,
-          createdAt: true,
-          area: { select: { name: true } },
-          form: { select: { formNumber: true, fullName: true } },
-        },
       }),
       countContestSlots(formsBase),
     ]);
@@ -148,8 +100,6 @@ export async function GET(request: NextRequest) {
           { label: 'Rejected', count: rejected },
         ],
       },
-      recentForms,
-      recentActivity,
     });
   } catch (e) {
     console.error('GET /api/ea-portal/dashboard failed:', e);

@@ -26,23 +26,6 @@ type Dashboard = {
     delegateType: { type: string; count: number }[];
     vettingProgress: { label: string; count: number }[];
   };
-  recentForms: {
-    id: string;
-    fullName: string;
-    position: string;
-    formNumber: string;
-    status: string;
-    pollingStationName: string;
-    electoralArea: { name: string };
-  }[];
-  recentActivity: {
-    id: string;
-    action: string;
-    details: string | null;
-    createdAt: string;
-    area: { name: string } | null;
-    form: { formNumber: string; fullName: string } | null;
-  }[];
 };
 
 function BarChart({
@@ -242,55 +225,6 @@ export default function EaPortalDashboardPage() {
                 labelKey="position"
                 valueKey="count"
               />
-            </div>
-          </div>
-
-          <div className="ea-portal-grid-2">
-            <div className="ea-portal-panel">
-              <div className="ea-portal-panel-header">
-                <h2>Recent forms</h2>
-              </div>
-              <div className="ea-portal-table-wrap">
-                <table className="ea-portal-table">
-                  <thead>
-                    <tr>
-                      <th>Form #</th>
-                      <th>Name</th>
-                      <th>Station</th>
-                      <th>Position</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.recentForms.map((f) => (
-                      <tr key={f.id}>
-                        <td>{f.formNumber}</td>
-                        <td>{f.fullName}</td>
-                        <td style={{ fontSize: '0.75rem' }}>{f.pollingStationName}</td>
-                        <td style={{ fontSize: '0.75rem' }}>{f.position}</td>
-                        <td>{f.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div className="ea-portal-panel">
-              <div className="ea-portal-panel-header">
-                <h2>Activity log</h2>
-              </div>
-              <ul className="ea-activity-list">
-                {data.recentActivity.map((a) => (
-                  <li key={a.id}>
-                    <strong>{a.action}</strong>
-                    {a.form ? ` · ${a.form.formNumber} ${a.form.fullName}` : ''}
-                    {a.details ? ` — ${a.details}` : ''}
-                    <span className="ea-activity-time">
-                      {new Date(a.createdAt).toLocaleString()}
-                    </span>
-                  </li>
-                ))}
-              </ul>
             </div>
           </div>
         </>

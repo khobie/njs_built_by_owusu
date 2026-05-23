@@ -85,3 +85,37 @@ export function buildEaFormFullName(
 export function isEaFormDelegateType(value: string): value is EaFormDelegateType {
   return (EA_FORM_DELEGATE_TYPES as readonly string[]).includes(value);
 }
+
+const EA_FORM_STATUS_LABELS: Record<string, string> = {
+  ISSUED: 'Issued',
+  RETURNED: 'Returned',
+  PENDING_VETTING: 'Pending vetting',
+  PENDING: 'Pending vetting',
+  VERIFIED: 'Verified',
+  REJECTED: 'Rejected',
+};
+
+export function eaFormStatusLabel(status: string): string {
+  return EA_FORM_STATUS_LABELS[status] ?? status;
+}
+
+export function eaDelegateTypeLabel(delegateType: string): string {
+  return delegateType === 'OLD' ? 'Old delegate' : 'New delegate';
+}
+
+/** CSS modifier for `.ea-status-badge` */
+export function eaFormStatusBadgeClass(status: string): string {
+  switch (status) {
+    case 'VERIFIED':
+      return 'ea-status-verified';
+    case 'REJECTED':
+      return 'ea-status-rejected';
+    case 'RETURNED':
+      return 'ea-status-returned';
+    case 'PENDING_VETTING':
+    case 'PENDING':
+      return 'ea-status-pending';
+    default:
+      return 'ea-status-issued';
+  }
+}
