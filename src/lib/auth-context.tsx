@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAdminRole } from '@/lib/roles';
+import { isAdminRole, type Role } from '@/lib/roles';
+import type { CreateUserInput } from '@/lib/user-account';
 
 interface User {
   id: string;
   name: string;
   email: string;
-  role: 'SUPER_ADMIN' | 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL';
+  role: Role;
   isActive: boolean;
 }
 
@@ -21,13 +22,7 @@ interface AuthContextType {
   userAreas: string[];
 }
 
-interface RegisterData {
-  name: string;
-  email: string;
-  password: string;
-  role: 'SUPER_ADMIN' | 'ADMIN' | 'FORM_ISSUER' | 'VETTING_PANEL';
-  areaCodes?: string[];
-}
+type RegisterData = CreateUserInput;
 
 const AuthContext = createContext<AuthContextType | null>(null);
 

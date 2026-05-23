@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
   const byKey = new Map<string, number>();
   for (const f of forms) {
-    const k = `${f.pollingStationCode}\t${f.position}`;
+    const k = `${f.electoralAreaId}\t${f.position}`;
     byKey.set(k, (byKey.get(k) ?? 0) + 1);
   }
   const contestedKeys = new Set<string>();
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
   const filtered =
     contestsOnly || unopposedOnly
       ? forms.filter((f) => {
-          const k = `${f.pollingStationCode}\t${f.position}`;
+          const k = `${f.electoralAreaId}\t${f.position}`;
           if (contestsOnly) return contestedKeys.has(k);
           if (unopposedOnly) return (byKey.get(k) ?? 0) === 1;
           return true;

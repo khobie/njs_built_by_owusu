@@ -167,9 +167,9 @@ model EaPortalIssuedForm {
   address              String?
   electoralAreaId      String
   electoralArea        EaPortalArea @relation(fields: [electoralAreaId], references: [id], onDelete: Restrict)
-  /// Required for new records; used for contest + duplicate detection.
-  pollingStationCode   String
-  pollingStationName   String
+  /// Optional; EA portal forms no longer require a polling station selection.
+  pollingStationCode   String       @default("")
+  pollingStationName   String       @default("")
   position             String
   formNumber           String       @unique
   delegateType         String       @default("NEW")
@@ -190,7 +190,7 @@ model EaPortalIssuedForm {
   updatedAt            DateTime     @updatedAt
   activities           EaPortalActivity[]
 
-  @@unique([pollingStationCode, position, phone])
+  @@unique([electoralAreaId, position, phone])
   @@index([electoralAreaId])
   @@index([voterId])
   @@index([pollingStationCode])

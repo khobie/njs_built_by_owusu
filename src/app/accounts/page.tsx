@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/dashboard/AppShell';
-import { eaPortalRoleLabel, needsEaPortalAreaAssignment } from '@/lib/ea-portal-user-roles';
+import { needsEaPortalAreaAssignment } from '@/lib/ea-portal-user-roles';
 import { isAdminRole } from '@/lib/roles';
+import { creatableRolesForActor, userRoleLabel } from '@/lib/user-role-labels';
 
 type Role =
   | 'SUPER_ADMIN'
@@ -41,11 +42,13 @@ interface UserRow {
 
 export default function AccountsPage() {
   const [meRole, setMeRole] = useState<Role | ''>('');
+  const [meId, setMeId] = useState('');
   const [meEmail, setMeEmail] = useState('');
   const [users, setUsers] = useState<UserRow[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
   const [eaPortalAreasList, setEaPortalAreasList] = useState<EaPortalAreaOption[]>([]);
   const [error, setError] = useState('');
+  const [createSuccess, setCreateSuccess] = useState('');
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [savingOwnPassword, setSavingOwnPassword] = useState(false);
@@ -58,12 +61,20 @@ export default function AccountsPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Role>('VETTING_PANEL');
+  const creatableRoles = useMemo(
+    () => (meRole ? creatableRolesForActor(meRole) : []),
+    [meRole],
+  );
   const [areaCodes, setAreaCodes] = useState<string[]>([]);
   const [eaPortalAreaIds, setEaPortalAreaIds] = useState<string[]>([]);
 
   const [assignModalUser, setAssignModalUser] = useState<UserRow | null>(null);
   const [assignModalIds, setAssignModalIds] = useState<string[]>([]);
   const [assignSaving, setAssignSaving] = useState(false);
+
+  const [vettingAssignUser, setVettingAssignUser] = useState<UserRow | null>(null);
+  const [vettingAssignCodes, setVettingAssignCodes] = useState<string[]>([]);
+  const [vettingAssignSaving, setVettingAssignSaving] = useState(false);
 
   const areaCodeSet = useMemo(() => new Set(areaCodes), [areaCodes]);
   const eaPortalAreaIdSet = useMemo(() => new Set(eaPortalAreaIds), [eaPortalAreaIds]);
@@ -83,6 +94,7 @@ export default function AccountsPage() {
         return;
       }
       setMeRole(s.user.role);
+      setMeId(s.user.id || '');
       setMeEmail(s.user.email || '');
       if (uRes.ok) {
         const raw: unknown[] = await uRes.json();
@@ -116,10 +128,27 @@ export default function AccountsPage() {
     void load();
   }, []);
 
+  useEffect(() => {
+    if (creatableRoles.length > 0 && !creatableRoles.includes(role)) {
+      setRole(creatableRoles[0] as Role);
+    }
+  }, [creatableRoles, role]);
+
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError('');
+    setCreateSuccess('');
+    if (password.trim().length < 6) {
+      setError('Password must be at least 6 characters.');
+      setSaving(false);
+      return;
+    }
+    if (role === 'VETTING_PANEL' && areaCodes.length === 0) {
+      setError('Vetting panel members must be assigned at least one nomination electoral area.');
+      setSaving(false);
+      return;
+    }
     if (needsEaPortalAreaAssignment(role) && eaPortalAreaIds.length === 0) {
       setError('This EA portal role must be assigned to at least one electoral area.');
       setSaving(false);
@@ -130,8 +159,8 @@ export default function AccountsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name,
-          email,
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
           password,
           role,
           areaCodes: role === 'VETTING_PANEL' ? areaCodes : [],
@@ -143,10 +172,11 @@ export default function AccountsPage() {
         setError(data?.error || 'Failed to create user');
         return;
       }
+      setCreateSuccess(`Account created for ${data.email ?? email}.`);
       setName('');
       setEmail('');
       setPassword('');
-      setRole('VETTING_PANEL');
+      setRole((creatableRoles[0] ?? 'VETTING_PANEL') as Role);
       setAreaCodes([]);
       setEaPortalAreaIds([]);
       await load();
@@ -213,6 +243,43 @@ export default function AccountsPage() {
     setAssignModalIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
+  const openVettingAssign = (u: UserRow) => {
+    setVettingAssignUser(u);
+    setVettingAssignCodes(u.electoralAreas.map((x) => x.areaCode));
+  };
+
+  const toggleVettingAssignCode = (code: string) => {
+    setVettingAssignCodes((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
+    );
+  };
+
+  const saveVettingAssignments = async () => {
+    if (!vettingAssignUser) return;
+    if (vettingAssignCodes.length === 0) {
+      setError('Select at least one nomination electoral area.');
+      return;
+    }
+    setVettingAssignSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/users/${vettingAssignUser.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ areaCodes: vettingAssignCodes }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data as { error?: string })?.error || 'Failed to update vetting areas.');
+        return;
+      }
+      setVettingAssignUser(null);
+      await load();
+    } finally {
+      setVettingAssignSaving(false);
+    }
+  };
+
   const savePortalAssignments = async () => {
     if (!assignModalUser) return;
     if (assignModalIds.length === 0) {
@@ -245,6 +312,57 @@ export default function AccountsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isActive: !u.isActive }),
     });
+    await load();
+  };
+
+  const clearAccount = async (u: UserRow) => {
+    if (u.id === meId) {
+      setError('You cannot clear your own account while signed in.');
+      return;
+    }
+    const ok = window.confirm(
+      `Clear account for ${u.name} (${u.email})?\n\nThis will deactivate the user and remove all vetting and EA portal area assignments. The login record is kept so you can reactivate or reassign later.`,
+    );
+    if (!ok) return;
+    setError('');
+    setCreateSuccess('');
+    const res = await fetch(`/api/users/${u.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clearAccount: true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError((data as { error?: string }).error || 'Failed to clear account.');
+      return;
+    }
+    setCreateSuccess(`Account cleared for ${u.email}.`);
+    await load();
+  };
+
+  const deleteAccount = async (u: UserRow) => {
+    if (u.id === meId) {
+      setError('You cannot delete your own account while signed in.');
+      return;
+    }
+    const ok = window.confirm(
+      `Permanently delete ${u.name} (${u.email})?\n\nThis cannot be undone. Any EA portal forms they issued will be reassigned to your admin account.`,
+    );
+    if (!ok) return;
+    setError('');
+    setCreateSuccess('');
+    const res = await fetch(`/api/users/${u.id}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError((data as { error?: string }).error || 'Failed to delete account.');
+      return;
+    }
+    const reassigned = (data as { reassignedForms?: number }).reassignedForms ?? 0;
+    setCreateSuccess(
+      reassigned > 0
+        ? `Deleted ${u.email}. ${reassigned} EA form(s) reassigned to you.`
+        : `Deleted ${u.email}.`,
+    );
     await load();
   };
 
@@ -282,6 +400,14 @@ export default function AccountsPage() {
           </div>
         </header>
         {error ? <div className="error">{error}</div> : null}
+        {createSuccess ? (
+          <div
+            style={{ marginBottom: '0.75rem', color: 'var(--accent-success, #15803d)' }}
+            role="status"
+          >
+            {createSuccess}
+          </div>
+        ) : null}
         {isAdminRole(meRole) ? (
           <>
             <section className="section" style={{ marginBottom: '1rem' }}>
@@ -341,7 +467,11 @@ export default function AccountsPage() {
             </section>
 
             <section className="section" style={{ marginBottom: '1rem' }}>
-              <h2 className="section-title" style={{ marginBottom: '1rem' }}>Create User Account</h2>
+              <h2 className="section-title" style={{ marginBottom: '1rem' }}>Create user account</h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                Nomination system roles (form issuing / vetting), EA portal roles, and system admins.
+                Scoped roles must be linked to electoral areas on creation.
+              </p>
               <form onSubmit={createUser}>
                 <div className="grid-3">
                   <div className="form-group">
@@ -354,7 +484,15 @@ export default function AccountsPage() {
                   </div>
                   <div className="form-group">
                     <label>Password</label>
-                    <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                    <input
+                      className="input"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      autoComplete="new-password"
+                    />
                   </div>
                 </div>
                 <div className="grid-2">
@@ -370,20 +508,46 @@ export default function AccountsPage() {
                         if (!needsEaPortalAreaAssignment(r)) setEaPortalAreaIds([]);
                       }}
                     >
-                      <option value="SUPER_ADMIN">Super Admin</option>
-                      <option value="ADMIN">Admin</option>
-                      <option value="FORM_ISSUER">Form Issuer (nomination)</option>
-                      <option value="VETTING_PANEL">Vetting Panel (nomination)</option>
-                      <option value="EA_PORTAL_ADMIN">EA Portal Admin (full)</option>
-                      <option value="EA_FORM_ISSUER">EA Form Issuer</option>
-                      <option value="EA_VETTING_PANEL">EA Vetting Panel</option>
-                      <option value="EA_OFFICER">EA Officer (issue + vet)</option>
-                      <option value="EA_DATA_ENTRY">EA Data Entry (full)</option>
+                      <optgroup label="System">
+                        {creatableRoles
+                          .filter((r) => ['SUPER_ADMIN', 'ADMIN'].includes(r))
+                          .map((r) => (
+                            <option key={r} value={r}>
+                              {userRoleLabel(r)}
+                            </option>
+                          ))}
+                      </optgroup>
+                      <optgroup label="Nomination system">
+                        {creatableRoles
+                          .filter((r) => ['FORM_ISSUER', 'VETTING_PANEL'].includes(r))
+                          .map((r) => (
+                            <option key={r} value={r}>
+                              {userRoleLabel(r)}
+                            </option>
+                          ))}
+                      </optgroup>
+                      <optgroup label="EA portal">
+                        {creatableRoles
+                          .filter((r) =>
+                            [
+                              'EA_PORTAL_ADMIN',
+                              'EA_FORM_ISSUER',
+                              'EA_VETTING_PANEL',
+                              'EA_OFFICER',
+                              'EA_DATA_ENTRY',
+                            ].includes(r),
+                          )
+                          .map((r) => (
+                            <option key={r} value={r}>
+                              {userRoleLabel(r)}
+                            </option>
+                          ))}
+                      </optgroup>
                     </select>
                   </div>
                   {role === 'VETTING_PANEL' ? (
                     <div className="form-group">
-                      <label>Electoral Area Assignment</label>
+                      <label>Nomination electoral areas (required)</label>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.35rem' }}>
                         {areas.map((a) => (
                           <label key={a.code} style={{ fontSize: '0.85rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
@@ -447,7 +611,7 @@ export default function AccountsPage() {
                       <tr key={u.id}>
                         <td>{u.name}</td>
                         <td>{u.email}</td>
-                        <td title={u.role}>{eaPortalRoleLabel(u.role)}</td>
+                        <td title={u.role}>{userRoleLabel(u.role)}</td>
                         <td>{u.electoralAreas.map((a) => a.areaCode).join(', ') || '—'}</td>
                         <td style={{ maxWidth: '14rem', fontSize: '0.85rem', verticalAlign: 'top' }}>{portalNamesForUser(u)}</td>
                         <td>{u.isActive ? 'Active' : 'Inactive'}</td>
@@ -459,10 +623,37 @@ export default function AccountsPage() {
                             <button className="btn btn-primary btn-sm" onClick={() => void changePassword(u)}>
                               Change Password
                             </button>
+                            {u.role === 'VETTING_PANEL' ? (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => openVettingAssign(u)}
+                              >
+                                Vetting areas
+                              </button>
+                            ) : null}
                             {needsEaPortalAreaAssignment(u.role) ? (
                               <button type="button" className="btn btn-secondary btn-sm" onClick={() => openEaPortalAssign(u)}>
                                 EA areas
                               </button>
+                            ) : null}
+                            {u.id !== meId ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => void clearAccount(u)}
+                                >
+                                  Clear account
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-danger btn-sm"
+                                  onClick={() => void deleteAccount(u)}
+                                >
+                                  Delete
+                                </button>
+                              </>
                             ) : null}
                           </div>
                         </td>
@@ -475,6 +666,79 @@ export default function AccountsPage() {
           </>
         ) : null}
       </div>
+
+      {vettingAssignUser ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="vetting-assign-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem',
+          }}
+          onClick={() => {
+            if (!vettingAssignSaving) setVettingAssignUser(null);
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--surface, #fff)',
+              padding: '1.25rem',
+              borderRadius: '10px',
+              maxWidth: '36rem',
+              width: '100%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="vetting-assign-title" style={{ marginTop: 0 }}>
+              Nomination vetting areas — {vettingAssignUser.name}
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+              This user only vets candidates in the selected nomination electoral areas.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.35rem' }}>
+              {areas.map((a) => (
+                <label key={a.code} style={{ fontSize: '0.85rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={vettingAssignCodes.includes(a.code)}
+                    onChange={() => toggleVettingAssignCode(a.code)}
+                    disabled={vettingAssignSaving}
+                  />
+                  {a.name} ({a.code})
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={vettingAssignSaving}
+                onClick={() => setVettingAssignUser(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={vettingAssignSaving}
+                onClick={() => void saveVettingAssignments()}
+              >
+                {vettingAssignSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {assignModalUser ? (
         <div

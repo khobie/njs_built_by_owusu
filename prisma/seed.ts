@@ -359,6 +359,53 @@ async function main() {
     });
   }
 
+  // Demo EA portal form issuer (scoped to first portal area)
+  const samplePortalArea = await prisma.eaPortalArea.findFirst({
+    orderBy: { name: 'asc' },
+    select: { id: true },
+  });
+  if (samplePortalArea) {
+    const eaIssuerPassword = await bcrypt.hash('eaissuer123', 10);
+    const eaIssuer = await prisma.user.upsert({
+      where: { email: 'eaissuer' },
+      update: {
+        passwordHash: eaIssuerPassword,
+        role: 'EA_FORM_ISSUER',
+        isActive: true,
+        name: 'EA Form Issuer Demo',
+      },
+      create: {
+        name: 'EA Form Issuer Demo',
+        email: 'eaissuer',
+        passwordHash: eaIssuerPassword,
+        role: 'EA_FORM_ISSUER',
+        isActive: true,
+      },
+    });
+    await prisma.userEaPortalArea.deleteMany({ where: { userId: eaIssuer.id } });
+    await prisma.userEaPortalArea.create({
+      data: { userId: eaIssuer.id, eaPortalAreaId: samplePortalArea.id },
+    });
+
+    const eaAdminPassword = await bcrypt.hash('eaportal123', 10);
+    await prisma.user.upsert({
+      where: { email: 'eaportal' },
+      update: {
+        passwordHash: eaAdminPassword,
+        role: 'EA_PORTAL_ADMIN',
+        isActive: true,
+        name: 'EA Portal Admin Demo',
+      },
+      create: {
+        name: 'EA Portal Admin Demo',
+        email: 'eaportal',
+        passwordHash: eaAdminPassword,
+        role: 'EA_PORTAL_ADMIN',
+        isActive: true,
+      },
+    });
+  }
+
   const areaCount = await prisma.electoralArea.count();
   const portalAreaCount = await prisma.eaPortalArea.count();
   const stationCount = await prisma.pollingStation.count();
@@ -369,7 +416,7 @@ async function main() {
   console.log(`   - ${portalAreaCount} EA portal areas (${portalAreasCreated} new this run)`);
   console.log(`   - ${stationCount} polling stations created`);
   console.log(
-    `   - ${userCount} users (admin/admin123 · superadmin/superadmin123 · vetting/vetting123)`,
+    `   - ${userCount} users (admin/admin123 · superadmin/superadmin123 · vetting/vetting123 · eaissuer/eaissuer123 · eaportal/eaportal123)`,
   );
 }
 

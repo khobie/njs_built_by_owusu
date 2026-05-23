@@ -17,8 +17,6 @@ type DelegateRow = {
   firstName: string;
   middleName: string | null;
   electoralAreaId: string;
-  pollingStationCode: string;
-  pollingStationName: string;
   position: string;
   formNumber: string;
   delegateType: string;
@@ -39,7 +37,6 @@ export default function EaPortalVettingPage() {
   const [modal, setModal] = useState<DelegateRow | null>(null);
   const [edit, setEdit] = useState<Partial<DelegateRow>>({});
   const [vetNotes, setVetNotes] = useState('');
-  const [stations, setStations] = useState<{ code: string; name: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -73,7 +70,7 @@ export default function EaPortalVettingPage() {
     void load();
   }, [load]);
 
-  const openEdit = async (r: DelegateRow) => {
+  const openEdit = (r: DelegateRow) => {
     setModal(r);
     setEdit({
       surname: r.surname,
@@ -81,18 +78,12 @@ export default function EaPortalVettingPage() {
       middleName: r.middleName,
       phone: r.phone,
       electoralAreaId: r.electoralAreaId,
-      pollingStationCode: r.pollingStationCode,
-      pollingStationName: r.pollingStationName,
       position: r.position,
       formNumber: r.formNumber,
       delegateType: r.delegateType,
       comment: r.comment ?? '',
     });
     setVetNotes(r.vettingNotes ?? '');
-    const res = await fetch(
-      `/api/ea-portal/polling-stations/list?eaPortalAreaId=${encodeURIComponent(r.electoralAreaId)}`
-    );
-    if (res.ok) setStations(await res.json());
   };
 
   const saveEdit = async () => {
@@ -108,8 +99,6 @@ export default function EaPortalVettingPage() {
           middleName: edit.middleName || null,
           phone: edit.phone,
           electoralAreaId: edit.electoralAreaId,
-          pollingStationCode: edit.pollingStationCode,
-          pollingStationName: edit.pollingStationName,
           position: edit.position,
           formNumber: edit.formNumber,
           delegateType: edit.delegateType,
@@ -216,7 +205,6 @@ export default function EaPortalVettingPage() {
                   <th>Name</th>
                   <th>Phone</th>
                   <th>Area</th>
-                  <th>Polling station</th>
                   <th>Type</th>
                   <th>Position</th>
                   <th>Status</th>
@@ -230,12 +218,11 @@ export default function EaPortalVettingPage() {
                     <td>{r.fullName}</td>
                     <td>{r.phone}</td>
                     <td>{r.electoralArea.name}</td>
-                    <td style={{ fontSize: '0.75rem' }}>{r.pollingStationName}</td>
                     <td>{r.delegateType === 'OLD' ? 'Old' : 'New'}</td>
                     <td style={{ fontSize: '0.75rem' }}>{r.position}</td>
                     <td>{r.status}</td>
                     <td>
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openEdit(r)}>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => openEdit(r)}>
                         Review
                       </button>
                     </td>
@@ -281,12 +268,7 @@ export default function EaPortalVettingPage() {
                   <select
                     className="select"
                     value={edit.electoralAreaId ?? ''}
-                    onChange={async (e) => {
-                      const id = e.target.value;
-                      setEdit((x) => ({ ...x, electoralAreaId: id }));
-                      const res = await fetch(`/api/ea-portal/polling-stations/list?eaPortalAreaId=${id}`);
-                      if (res.ok) setStations(await res.json());
-                    }}
+                    onChange={(e) => setEdit((x) => ({ ...x, electoralAreaId: e.target.value }))}
                   >
                     {areas.map((a) => (
                       <option key={a.id} value={a.id}>
@@ -295,28 +277,6 @@ export default function EaPortalVettingPage() {
                     ))}
                   </select>
                 </div>
-              </div>
-              <div className="form-group">
-                <label>Polling station</label>
-                <select
-                  className="select"
-                  value={edit.pollingStationCode ?? ''}
-                  onChange={(e) => {
-                    const code = e.target.value;
-                    const st = stations.find((s) => s.code === code);
-                    setEdit((x) => ({
-                      ...x,
-                      pollingStationCode: code,
-                      pollingStationName: st?.name ?? x.pollingStationName,
-                    }));
-                  }}
-                >
-                  {stations.map((s) => (
-                    <option key={s.code} value={s.code}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
               </div>
               <div className="grid-2">
                 <div className="form-group">

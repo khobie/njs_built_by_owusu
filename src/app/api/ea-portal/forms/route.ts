@@ -42,8 +42,6 @@ const postSchema = z.object({
   middleName: z.string().optional().nullable(),
   phone: z.string().min(3),
   electoralAreaId: z.string().min(1),
-  pollingStationCode: z.string().min(1),
-  pollingStationName: z.string().min(1),
   position: z.string().min(1),
   formNumber: formNumberSchema.optional(),
   delegateType: z.enum(['NEW', 'OLD']),
@@ -119,12 +117,12 @@ export async function GET(request: NextRequest) {
 
   if (parsed.data.contestOnly) {
     const groups = await prisma.eaPortalIssuedForm.groupBy({
-      by: ['pollingStationCode', 'position'],
+      by: ['electoralAreaId', 'position'],
       where,
       _count: { _all: true },
     });
     const keys = new Set(
-      groups.filter((g) => g._count._all > 1).map((g) => `${g.pollingStationCode}\t${g.position}`)
+      groups.filter((g) => g._count._all > 1).map((g) => `${g.electoralAreaId}\t${g.position}`)
     );
     const rows = await prisma.eaPortalIssuedForm.findMany({
       where,
@@ -138,7 +136,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json(
       rows
-        .filter((r) => keys.has(`${r.pollingStationCode}\t${r.position}`))
+        .filter((r) => keys.has(`${r.electoralAreaId}\t${r.position}`))
         .map((r) => ({ ...r, status: normalizeEaFormStatus(r.status) }))
     );
   }
@@ -180,11 +178,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Phone is required.' }, { status: 400 });
     }
 
-    const pollingStationCode = body.pollingStationCode.trim();
-    const pollingStationName = body.pollingStationName.trim();
-
     const dup = await findDuplicateDelegate({
-      pollingStationCode,
+      electoralAreaId: body.electoralAreaId,
       position: body.position,
       phone,
     });
@@ -192,7 +187,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            'A delegate already exists for this polling station, position, and phone. Edit the existing record instead.',
+            'A delegate already exists for this electoral area, position, and phone. Edit the existing record instead.',
           existingId: dup.id,
         },
         { status: 409 }
@@ -235,8 +230,8 @@ export async function POST(request: NextRequest) {
         phone,
         voterId: voterId || null,
         electoralAreaId: body.electoralAreaId,
-        pollingStationCode,
-        pollingStationName,
+        pollingStationCode: '',
+        pollingStationName: '',
         position: body.position,
         formNumber: formNum,
         delegateType: body.delegateType,
@@ -273,7 +268,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            'Duplicate delegate for this polling station, position, and phone. Update the existing record.',
+            'Duplicate delegate for this electoral area, position, and phone. Update the existing record.',
         },
         { status: 409 }
       );

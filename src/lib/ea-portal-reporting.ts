@@ -59,18 +59,18 @@ export async function buildEaPortalReportPayload(
 
   if (filters.contestOnly || filters.unopposedOnly) {
     const groups = await prisma.eaPortalIssuedForm.groupBy({
-      by: ['pollingStationCode', 'position'],
+      by: ['electoralAreaId', 'position'],
       where,
       _count: { _all: true },
     });
     const contestKeys = new Set(
-      groups.filter((g) => g._count._all > 1).map((g) => `${g.pollingStationCode}\t${g.position}`)
+      groups.filter((g) => g._count._all > 1).map((g) => `${g.electoralAreaId}\t${g.position}`)
     );
     const unopposedKeys = new Set(
-      groups.filter((g) => g._count._all === 1).map((g) => `${g.pollingStationCode}\t${g.position}`)
+      groups.filter((g) => g._count._all === 1).map((g) => `${g.electoralAreaId}\t${g.position}`)
     );
     rows = forms.filter((r) => {
-      const k = `${r.pollingStationCode}\t${r.position}`;
+      const k = `${r.electoralAreaId}\t${r.position}`;
       if (filters.contestOnly) return contestKeys.has(k);
       if (filters.unopposedOnly) return unopposedKeys.has(k);
       return true;
@@ -129,7 +129,7 @@ export async function buildEaPortalReportPayload(
 
   const slotContestByArea = new Map<string, number>();
   const groups = await prisma.eaPortalIssuedForm.groupBy({
-    by: ['electoralAreaId', 'pollingStationCode', 'position'],
+    by: ['electoralAreaId', 'position'],
     where,
     _count: { _all: true },
   });

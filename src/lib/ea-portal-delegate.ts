@@ -2,14 +2,11 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { EA_FORM_NUMBER_MAX_LEN } from '@/lib/ea-portal-form-constants';
 
-/** Contest = more than one delegate for same polling station + position. */
+/** Contest = more than one delegate for same electoral area + position. */
 export async function countContestSlots(where: Prisma.EaPortalIssuedFormWhereInput) {
   const groups = await prisma.eaPortalIssuedForm.groupBy({
-    by: ['pollingStationCode', 'position'],
-    where: {
-      ...where,
-      pollingStationCode: { not: '' },
-    },
+    by: ['electoralAreaId', 'position'],
+    where,
     _count: { _all: true },
   });
   const contests = groups.filter((g) => g._count._all > 1).length;
@@ -18,14 +15,14 @@ export async function countContestSlots(where: Prisma.EaPortalIssuedFormWhereInp
 }
 
 export async function findDuplicateDelegate(args: {
-  pollingStationCode: string;
+  electoralAreaId: string;
   position: string;
   phone: string;
   excludeId?: string;
 }) {
   return prisma.eaPortalIssuedForm.findFirst({
     where: {
-      pollingStationCode: args.pollingStationCode,
+      electoralAreaId: args.electoralAreaId,
       position: args.position,
       phone: args.phone,
       ...(args.excludeId ? { NOT: { id: args.excludeId } } : {}),

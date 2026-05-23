@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
-import { needsEaPortalAreaAssignment } from '@/lib/ea-portal-user-roles';
 import { isAdminRole } from '@/lib/roles';
+import {
+  createUserAccount,
+  UserAccountError,
+  validateCreateUserInput,
+  type CreateUserInput,
+} from '@/lib/user-account';
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser(request);
@@ -31,48 +35,20 @@ export async function POST(request: NextRequest) {
   if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isAdminRole(sessionUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const body = await request.json();
-  const {
-    name,
-    email,
-    password,
-    role,
-    areaCodes = [],
-    eaPortalAreaIds = [],
-  } = body as {
-    name: string;
-    email: string;
-    password: string;
-    role: string;
-    areaCodes?: string[];
-    eaPortalAreaIds?: string[];
-  };
-
-  if (!name || !email || !password || !role) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  const body = (await request.json()) as CreateUserInput;
+  const validated = validateCreateUserInput(body, sessionUser.role);
+  if (!validated.ok) {
+    return NextResponse.json({ error: validated.error }, { status: 400 });
   }
 
-  const exists = await prisma.user.findUnique({ where: { email } });
-  if (exists) return NextResponse.json({ error: 'Email already exists' }, { status: 409 });
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  const created = await prisma.user.create({
-    data: { name, email, passwordHash, role, isActive: true },
-    select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
-  });
-
-  if (role === 'VETTING_PANEL' && areaCodes.length) {
-    await prisma.userElectoralArea.createMany({
-      data: areaCodes.map((areaCode) => ({ userId: created.id, areaCode })),
-    });
+  try {
+    const created = await createUserAccount(validated.data);
+    return NextResponse.json(created, { status: 201 });
+  } catch (e) {
+    if (e instanceof UserAccountError) {
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
+    console.error('Create user failed:', e);
+    return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
   }
-
-  if (needsEaPortalAreaAssignment(role) && eaPortalAreaIds.length) {
-    await prisma.userEaPortalArea.createMany({
-      data: eaPortalAreaIds.map((eaPortalAreaId) => ({ userId: created.id, eaPortalAreaId })),
-    });
-  }
-
-  return NextResponse.json(created, { status: 201 });
 }
-

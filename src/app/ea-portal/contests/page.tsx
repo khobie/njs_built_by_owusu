@@ -9,7 +9,6 @@ type Row = {
   formNumber: string;
   phone: string;
   position: string;
-  pollingStationName: string;
   electoralArea: { name: string };
 };
 
@@ -37,7 +36,7 @@ export default function EaPortalContestsPage() {
         <h1>Contest monitoring</h1>
         <p>
           A contest exists when more than one delegate applies for the same{' '}
-          <strong>polling station + position</strong>.
+          <strong>electoral area + position</strong>.
         </p>
         <Link href="/ea-portal/vetting?contestOnly=1" className="btn btn-secondary btn-sm" style={{ marginTop: '0.5rem' }}>
           Open in vetting panel
@@ -57,7 +56,6 @@ export default function EaPortalContestsPage() {
                   <th>Name</th>
                   <th>Phone</th>
                   <th>Area</th>
-                  <th>Polling station</th>
                   <th>Position</th>
                 </tr>
               </thead>
@@ -68,7 +66,6 @@ export default function EaPortalContestsPage() {
                     <td>{r.fullName}</td>
                     <td>{r.phone}</td>
                     <td>{r.electoralArea.name}</td>
-                    <td>{r.pollingStationName}</td>
                     <td>{r.position}</td>
                   </tr>
                 ))}

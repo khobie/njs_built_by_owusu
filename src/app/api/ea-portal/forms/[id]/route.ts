@@ -25,8 +25,6 @@ const patchSchema = z.object({
   middleName: z.string().optional().nullable(),
   phone: z.string().min(3).optional(),
   electoralAreaId: z.string().min(1).optional(),
-  pollingStationCode: z.string().min(1).optional(),
-  pollingStationName: z.string().min(1).optional(),
   position: z.string().min(1).optional(),
   formNumber: formNumberSchema.optional(),
   delegateType: z.enum(['NEW', 'OLD']).optional(),
@@ -81,9 +79,6 @@ export async function PATCH(
     const nextAreaId = body.electoralAreaId ?? existing.electoralAreaId;
     const nextPosition = body.position ?? existing.position;
     const nextPhone = body.phone !== undefined ? normalizeEaFormPhone(body.phone) : existing.phone;
-    const nextPollingCode = body.pollingStationCode?.trim() ?? existing.pollingStationCode;
-    const nextPollingName = body.pollingStationName?.trim() ?? existing.pollingStationName;
-
     const nextSurname = body.surname !== undefined ? body.surname.trim() : existing.surname;
     const nextFirst = body.firstName !== undefined ? body.firstName.trim() : existing.firstName;
     const nextMiddle =
@@ -113,7 +108,7 @@ export async function PATCH(
       }
     }
     const dup = await findDuplicateDelegate({
-      pollingStationCode: nextPollingCode,
+      electoralAreaId: nextAreaId,
       position: nextPosition,
       phone: nextPhone,
       excludeId: existing.id,
@@ -122,7 +117,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            'Another delegate already uses this polling station, position, and phone. Update that record instead.',
+            'Another delegate already uses this electoral area, position, and phone. Update that record instead.',
           existingId: dup.id,
         },
         { status: 409 }
@@ -149,8 +144,6 @@ export async function PATCH(
         fullName: nextFull,
         ...(body.phone !== undefined ? { phone: nextPhone } : {}),
         ...(body.electoralAreaId !== undefined ? { electoralAreaId: body.electoralAreaId } : {}),
-        ...(body.pollingStationCode !== undefined ? { pollingStationCode: nextPollingCode } : {}),
-        ...(body.pollingStationName !== undefined ? { pollingStationName: nextPollingName } : {}),
         ...(body.position !== undefined ? { position: body.position } : {}),
         ...(body.formNumber !== undefined ? { formNumber: body.formNumber.trim() } : {}),
         ...(body.delegateType !== undefined ? { delegateType: body.delegateType } : {}),
@@ -186,7 +179,7 @@ export async function PATCH(
         return NextResponse.json({ error: 'Form number already in use.' }, { status: 409 });
       }
       return NextResponse.json(
-        { error: 'Duplicate delegate for polling station, position, and phone.' },
+        { error: 'Duplicate delegate for electoral area, position, and phone.' },
         { status: 409 }
       );
     }

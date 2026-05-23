@@ -19,12 +19,6 @@ type AreaOpt = {
   district?: string;
 };
 
-type PollingSearchHit = {
-  code: string;
-  name: string;
-  electoralArea: { name: string; code: string };
-};
-
 type FormRow = {
   id: string;
   fullName: string;
@@ -79,8 +73,6 @@ export default function ElectoralAreaFormsPage() {
 
   const [issue, setIssue] = useState({
     electoralAreaId: '',
-    pollingStationCode: '',
-    pollingStationName: '',
     formNumber: '',
     phone: '',
     voterId: '',
@@ -94,8 +86,6 @@ export default function ElectoralAreaFormsPage() {
     sourceCandidateId: '' as string,
   });
 
-  const [stationList, setStationList] = useState<{ code: string; name: string }[]>([]);
-  const [stationsLoading, setStationsLoading] = useState(false);
   const [autoFormNumber, setAutoFormNumber] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [importQ, setImportQ] = useState('');
@@ -114,10 +104,6 @@ export default function ElectoralAreaFormsPage() {
     }[]
   >([]);
 
-  const [editStationQuery, setEditStationQuery] = useState('');
-  const [editStationHits, setEditStationHits] = useState<PollingSearchHit[]>([]);
-  const [editStationSearchBusy, setEditStationSearchBusy] = useState(false);
-
   const [edit, setEdit] = useState({
     surname: '',
     firstName: '',
@@ -125,8 +111,6 @@ export default function ElectoralAreaFormsPage() {
     phone: '',
     voterId: '',
     electoralAreaId: '',
-    pollingStationCode: '',
-    pollingStationName: '',
     position: '',
     formNumber: '',
     delegateType: 'NEW' as EaFormDelegateType,
@@ -171,26 +155,6 @@ export default function ElectoralAreaFormsPage() {
   }, []);
 
   useEffect(() => {
-    if (!issue.electoralAreaId) {
-      setStationList([]);
-      return;
-    }
-    void (async () => {
-      setStationsLoading(true);
-      try {
-        const res = await fetch(
-          `/api/ea-portal/polling-stations/list?eaPortalAreaId=${encodeURIComponent(issue.electoralAreaId)}`,
-          { cache: 'no-store' }
-        );
-        if (res.ok) setStationList(await res.json());
-        else setStationList([]);
-      } finally {
-        setStationsLoading(false);
-      }
-    })();
-  }, [issue.electoralAreaId]);
-
-  useEffect(() => {
     if (!importOpen || importQ.trim().length < 2) {
       setImportHits([]);
       return;
@@ -205,39 +169,6 @@ export default function ElectoralAreaFormsPage() {
     }, 320);
     return () => window.clearTimeout(t);
   }, [importOpen, importQ, issue.electoralAreaId]);
-
-  useEffect(() => {
-    if (!modal) {
-      setEditStationHits([]);
-      setEditStationQuery('');
-      return;
-    }
-    if (!edit.electoralAreaId || editStationQuery.trim().length < 2) {
-      setEditStationHits([]);
-      return;
-    }
-    const t = window.setTimeout(() => {
-      void (async () => {
-        setEditStationSearchBusy(true);
-        try {
-          const p = new URLSearchParams({
-            q: editStationQuery.trim(),
-            eaPortalAreaId: edit.electoralAreaId,
-          });
-          const res = await fetch(`/api/ea-portal/polling-stations/search?${p}`, { cache: 'no-store' });
-          if (res.ok) {
-            const data = (await res.json()) as PollingSearchHit[];
-            setEditStationHits(Array.isArray(data) ? data : []);
-          } else {
-            setEditStationHits([]);
-          }
-        } finally {
-          setEditStationSearchBusy(false);
-        }
-      })();
-    }, 320);
-    return () => window.clearTimeout(t);
-  }, [modal, editStationQuery, edit.electoralAreaId]);
 
   const loadForms = useCallback(async () => {
     setLoadingList(true);
@@ -266,13 +197,7 @@ export default function ElectoralAreaFormsPage() {
   }, [loadForms]);
 
   const onIssueAreaChange = (areaId: string) => {
-    setIssue((s) => ({
-      ...s,
-      electoralAreaId: areaId,
-      pollingStationCode: '',
-      pollingStationName: '',
-    }));
-    setStationList([]);
+    setIssue((s) => ({ ...s, electoralAreaId: areaId }));
   };
 
   const applyImport = (hit: (typeof importHits)[0]) => {
@@ -284,8 +209,6 @@ export default function ElectoralAreaFormsPage() {
       phone: hit.phone,
       delegateType: hit.delegateType === 'OLD' ? 'OLD' : 'NEW',
       position: hit.position || s.position,
-      pollingStationCode: hit.pollingStationCode ?? '',
-      pollingStationName: hit.pollingStationName ?? '',
       sourceCandidateId: hit.id,
     }));
     setImportOpen(false);
@@ -301,10 +224,6 @@ export default function ElectoralAreaFormsPage() {
     }
     if (!issue.surname.trim() || !issue.firstName.trim()) {
       setToast({ type: 'err', text: 'Surname and first name are required.' });
-      return;
-    }
-    if (!issue.pollingStationCode) {
-      setToast({ type: 'err', text: 'Select a polling station.' });
       return;
     }
     if (!issue.position) {
@@ -335,8 +254,6 @@ export default function ElectoralAreaFormsPage() {
           phone: issue.phone,
           voterId: issue.voterId.trim() || null,
           electoralAreaId: issue.electoralAreaId,
-          pollingStationCode: issue.pollingStationCode.trim(),
-          pollingStationName: issue.pollingStationName.trim(),
           position: issue.position,
           ...(fn ? { formNumber: fn } : {}),
           delegateType: issue.delegateType,
@@ -360,8 +277,6 @@ export default function ElectoralAreaFormsPage() {
         firstName: '',
         middleName: '',
         comment: '',
-        pollingStationCode: '',
-        pollingStationName: '',
         dateIssued: todayDate(),
       });
       void loadForms();
@@ -371,14 +286,8 @@ export default function ElectoralAreaFormsPage() {
     }
   };
 
-  const openEdit = async (r: FormRow) => {
+  const openEdit = (r: FormRow) => {
     setModal(r);
-    setEditStationQuery('');
-    setEditStationHits([]);
-    const stRes = await fetch(
-      `/api/ea-portal/polling-stations/list?eaPortalAreaId=${encodeURIComponent(r.electoralAreaId)}`
-    );
-    if (stRes.ok) setStationList(await stRes.json());
     setEdit({
       surname: r.surname,
       firstName: r.firstName,
@@ -386,8 +295,6 @@ export default function ElectoralAreaFormsPage() {
       phone: r.phone,
       voterId: r.voterId ?? '',
       electoralAreaId: r.electoralAreaId,
-      pollingStationCode: r.pollingStationCode ?? '',
-      pollingStationName: r.pollingStationName ?? '',
       position: r.position,
       formNumber: r.formNumber,
       delegateType: (r.delegateType === 'OLD' ? 'OLD' : 'NEW') as EaFormDelegateType,
@@ -424,8 +331,6 @@ export default function ElectoralAreaFormsPage() {
           phone: edit.phone,
           voterId: edit.voterId.trim() || null,
           electoralAreaId: edit.electoralAreaId,
-          pollingStationCode: edit.pollingStationCode.trim(),
-          pollingStationName: edit.pollingStationName.trim(),
           position: edit.position,
           formNumber: fn,
           delegateType: edit.delegateType,
@@ -460,7 +365,7 @@ export default function ElectoralAreaFormsPage() {
         <h1>Electoral Area form issuing</h1>
         <p>
           Issue and register Electoral Area delegates — separate from the polling-station nomination system.
-          Duplicates blocked by phone + position + polling station.
+          Duplicates blocked by electoral area + position + phone.
         </p>
       </header>
 
@@ -504,41 +409,7 @@ export default function ElectoralAreaFormsPage() {
           </div>
 
           <div>
-            <div className="ea-form-step-label">Step 2 · Polling station</div>
-            <div className="form-group">
-              <label>Polling station</label>
-              <select
-                className="select"
-                required
-                disabled={!issue.electoralAreaId || stationsLoading}
-                value={issue.pollingStationCode}
-                onChange={(e) => {
-                  const code = e.target.value;
-                  const st = stationList.find((s) => s.code === code);
-                  setIssue((x) => ({
-                    ...x,
-                    pollingStationCode: code,
-                    pollingStationName: st?.name ?? '',
-                  }));
-                }}
-              >
-                <option value="">
-                  {stationsLoading ? 'Loading stations…' : 'Select polling station'}
-                </option>
-                {stationList.map((s) => (
-                  <option key={s.code} value={s.code}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>
-                Each option is a unique station (name shown; code stored internally).
-              </span>
-            </div>
-          </div>
-
-          <div>
-            <div className="ea-form-step-label">Step 3 · Form number, phone &amp; voter ID</div>
+            <div className="ea-form-step-label">Step 2 · Form number, phone &amp; voter ID</div>
             <div className="grid-3">
               <div className="form-group">
                 <label>Form number</label>
@@ -598,7 +469,7 @@ export default function ElectoralAreaFormsPage() {
           </div>
 
           <div>
-            <div className="ea-form-step-label">Step 4 · Applicant name</div>
+            <div className="ea-form-step-label">Step 3 · Applicant name</div>
             <div className="grid-3">
               <div className="form-group">
                 <label>Surname</label>
@@ -630,7 +501,7 @@ export default function ElectoralAreaFormsPage() {
           </div>
 
           <div>
-            <div className="ea-form-step-label">Step 5 · Position &amp; delegate type</div>
+            <div className="ea-form-step-label">Step 4 · Position &amp; delegate type</div>
             <div className="grid-2">
               <div className="form-group">
                 <label>Position applied for</label>
@@ -669,7 +540,7 @@ export default function ElectoralAreaFormsPage() {
           </div>
 
           <div>
-            <div className="ea-form-step-label">Step 6 · Comment &amp; issue date</div>
+            <div className="ea-form-step-label">Step 5 · Comment &amp; issue date</div>
             <div className="form-group">
               <label>Comment</label>
               <textarea
@@ -803,7 +674,7 @@ export default function ElectoralAreaFormsPage() {
                     </td>
                     <td style={{ fontSize: '0.75rem' }}>{r.issuedBy.name}</td>
                     <td>
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openEdit(r)}>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => openEdit(r)}>
                         Edit
                       </button>
                     </td>
@@ -831,46 +702,11 @@ export default function ElectoralAreaFormsPage() {
                   className="select"
                   required
                   value={edit.electoralAreaId}
-                  onChange={async (e) => {
-                    const id = e.target.value;
-                    setEdit((x) => ({
-                      ...x,
-                      electoralAreaId: id,
-                      pollingStationCode: '',
-                      pollingStationName: '',
-                    }));
-                    const res = await fetch(
-                      `/api/ea-portal/polling-stations/list?eaPortalAreaId=${encodeURIComponent(id)}`
-                    );
-                    if (res.ok) setStationList(await res.json());
-                  }}
+                  onChange={(e) => setEdit((x) => ({ ...x, electoralAreaId: e.target.value }))}
                 >
                   {areas.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.name} · {a.region}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Polling station</label>
-                <select
-                  className="select"
-                  required
-                  value={edit.pollingStationCode}
-                  onChange={(e) => {
-                    const code = e.target.value;
-                    const st = stationList.find((s) => s.code === code);
-                    setEdit((x) => ({
-                      ...x,
-                      pollingStationCode: code,
-                      pollingStationName: st?.name ?? x.pollingStationName,
-                    }));
-                  }}
-                >
-                  {stationList.map((s) => (
-                    <option key={s.code} value={s.code}>
-                      {s.name}
                     </option>
                   ))}
                 </select>
