@@ -16,6 +16,49 @@ export const EA_FORM_DELEGATE_TYPES = ['NEW', 'OLD'] as const;
 export type EaFormDelegateType = (typeof EA_FORM_DELEGATE_TYPES)[number];
 
 export const EA_FORM_NUMBER_MAX_LEN = 6;
+export const EA_VOTER_ID_MAX_LEN = 20;
+/** Max stored passport photo payload (~500 KB base64). */
+export const EA_PASSPORT_PHOTO_MAX_CHARS = 700_000;
+
+export const EA_FORM_LIST_SELECT = {
+  id: true,
+  fullName: true,
+  surname: true,
+  firstName: true,
+  middleName: true,
+  phone: true,
+  voterId: true,
+  gender: true,
+  address: true,
+  electoralAreaId: true,
+  pollingStationCode: true,
+  pollingStationName: true,
+  position: true,
+  formNumber: true,
+  delegateType: true,
+  comment: true,
+  status: true,
+  vettingNotes: true,
+  verifiedAt: true,
+  returnedAt: true,
+  sourceCandidateId: true,
+  issuedByUserId: true,
+  issuedAt: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+export function normalizeEaVoterId(input: string): string {
+  return String(input).replace(/\s+/g, '').trim().toUpperCase();
+}
+
+export function isValidEaPassportPhotoDataUrl(value: string | null | undefined): boolean {
+  if (!value || typeof value !== 'string') return true;
+  const v = value.trim();
+  if (!v) return true;
+  if (v.length > EA_PASSPORT_PHOTO_MAX_CHARS) return false;
+  return /^data:image\/(jpeg|jpg|png);base64,/i.test(v);
+}
 
 export const EA_FORM_STATUSES = [
   'ISSUED',

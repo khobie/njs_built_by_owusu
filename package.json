@@ -18,9 +18,11 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@imgly/background-removal": "^1.7.0",
     "@prisma/client": "^5.10.0",
     "bcryptjs": "^2.4.3",
     "next": "14.1.0",
+    "onnxruntime-web": "^1.21.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "zod": "^3.22.4"

@@ -152,7 +152,7 @@ export async function GET(request: NextRequest) {
 
   const detailRows = filtered.map(
     (f) =>
-      `<tr><td>${escapeHtml(f.formNumber)}</td><td>${escapeHtml(f.fullName)}</td><td>${escapeHtml(f.phone)}</td><td>${escapeHtml(f.electoralArea.name)}</td><td>${escapeHtml(f.position)}</td><td>${escapeHtml(f.status)}</td><td>${escapeHtml(f.delegateType)}</td><td>${f.issuedAt.toISOString()}</td><td>${escapeHtml(f.issuedBy.name)}</td></tr>`
+      `<tr><td>${escapeHtml(f.formNumber)}</td><td>${escapeHtml(f.fullName)}</td><td>${escapeHtml(f.phone)}</td><td>${escapeHtml(f.voterId ?? '')}</td><td>${f.passportPhoto ? 'Yes' : ''}</td><td>${escapeHtml(f.electoralArea.name)}</td><td>${escapeHtml(f.position)}</td><td>${escapeHtml(f.status)}</td><td>${escapeHtml(f.delegateType)}</td><td>${f.issuedAt.toISOString()}</td><td>${escapeHtml(f.issuedBy.name)}</td></tr>`
   );
 
   if (format === 'xls' || format === 'excel') {
@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
       <h2>EA Form issuing — Forms per area</h2>
       <table border="1"><thead><tr><th>Area</th><th>Region</th><th>Forms</th></tr></thead><tbody>${summaryRows.join('')}</tbody></table>
       <h2>Forms ${contestsOnly ? '(contests only)' : ''}</h2>
-      <table border="1"><thead><tr><th>Form #</th><th>Name</th><th>Phone</th><th>Area</th><th>Position</th><th>Status</th><th>Delegate</th><th>Issued</th><th>Issued by</th></tr></thead><tbody>${detailRows.join('')}</tbody></table>
+      <table border="1"><thead><tr><th>Form #</th><th>Name</th><th>Phone</th><th>Voter ID</th><th>Photo</th><th>Area</th><th>Position</th><th>Status</th><th>Delegate</th><th>Issued</th><th>Issued by</th></tr></thead><tbody>${detailRows.join('')}</tbody></table>
     </body></html>`;
     return new NextResponse(html, {
       headers: {
@@ -187,7 +187,7 @@ export async function GET(request: NextRequest) {
       </style></head><body>
       <button class="no-print" type="button" onclick="window.print()">Print / Save as PDF</button>
       <h1>EA Form issuing ${contestsOnly ? '— contests only ' : ''}— ${escapeHtml(stamp)}</h1>
-      <table><thead><tr><th>Form #</th><th>Name</th><th>Phone</th><th>Area</th><th>Position</th><th>Status</th><th>Delegate</th><th>Issued</th><th>By</th></tr></thead><tbody>${detailRows.join('')}</tbody></table>
+      <table><thead><tr><th>Form #</th><th>Name</th><th>Phone</th><th>Voter ID</th><th>Photo</th><th>Area</th><th>Position</th><th>Status</th><th>Delegate</th><th>Issued</th><th>By</th></tr></thead><tbody>${detailRows.join('')}</tbody></table>
     </body></html>`;
     return new NextResponse(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
@@ -207,6 +207,8 @@ export async function GET(request: NextRequest) {
       'middleName',
       'fullName',
       'phone',
+      'voterId',
+      'hasPassportPhoto',
       'delegateType',
       'comment',
       'electoralArea',
@@ -231,6 +233,8 @@ export async function GET(request: NextRequest) {
         f.middleName ?? '',
         f.fullName,
         f.phone,
+        f.voterId ?? '',
+        f.passportPhoto ? 'yes' : 'no',
         f.delegateType,
         f.comment ?? '',
         f.electoralArea.name,

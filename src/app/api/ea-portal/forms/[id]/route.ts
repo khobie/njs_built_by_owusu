@@ -8,6 +8,8 @@ import {
   isEaFormDelegateType,
   isEaFormPosition,
   normalizeEaFormPhone,
+  normalizeEaVoterId,
+  isValidEaPassportPhotoDataUrl,
 } from '@/lib/ea-portal-form-constants';
 import { canIssueEaForms, canVetEaDelegates, formsVisibleWhere, logEaPortalActivity } from '@/lib/ea-portal-access';
 import { findDuplicateDelegate } from '@/lib/ea-portal-delegate';
@@ -32,6 +34,9 @@ const patchSchema = z.object({
   comment: z.string().optional().nullable(),
   status: z.enum(EA_FORM_STATUSES).optional(),
   issuedAt: z.string().optional(),
+  voterId: z.string().optional().nullable(),
+  passportPhoto: z.string().optional().nullable(),
+  clearPassportPhoto: z.boolean().optional(),
 });
 
 export async function GET(
@@ -104,6 +109,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Name fields are required.' }, { status: 400 });
     }
 
+    if (body.voterId !== undefined) {
+      const voterId = body.voterId ? normalizeEaVoterId(body.voterId) : null;
+      if (voterId && voterId.length > 20) {
+        return NextResponse.json({ error: 'Voter ID is too long (max 20 characters).' }, { status: 400 });
+      }
+    }
+    if (body.passportPhoto !== undefined && !isValidEaPassportPhotoDataUrl(body.passportPhoto)) {
+      return NextResponse.json({ error: 'Invalid passport photo.' }, { status: 400 });
+    }
+
     const dup = await findDuplicateDelegate({
       pollingStationCode: nextPollingCode,
       position: nextPosition,
@@ -149,6 +164,14 @@ export async function PATCH(
         ...(body.comment !== undefined ? { comment: body.comment?.trim() || null } : {}),
         ...(body.status !== undefined ? { status: body.status } : {}),
         ...(body.issuedAt !== undefined ? { issuedAt: new Date(body.issuedAt) } : {}),
+        ...(body.voterId !== undefined
+          ? { voterId: body.voterId ? normalizeEaVoterId(body.voterId) : null }
+          : {}),
+        ...(body.clearPassportPhoto
+          ? { passportPhoto: null }
+          : body.passportPhoto !== undefined
+            ? { passportPhoto: body.passportPhoto?.trim() || null }
+            : {}),
       },
       include: {
         electoralArea: { select: { id: true, name: true, region: true } },

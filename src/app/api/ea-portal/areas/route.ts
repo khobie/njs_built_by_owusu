@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { areaFilterForScope, logEaPortalActivity } from '@/lib/ea-portal-access';
 import { syncEaPortalAreasFromDelegate } from '@/lib/ea-portal-areas-sync';
+import { KOFORIDUA_ELECTORAL_AREAS } from '@/lib/koforidua-electoral-areas';
 import { sortByKoforiduaAreaOrder } from '@/lib/koforidua-electoral-areas';
 import { syncKoforiduaElectoralAreas } from '@/lib/koforidua-electoral-areas-sync';
 import { requireEaPortal } from '@/lib/ea-portal-session';
@@ -16,30 +17,40 @@ const createSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const gate = await requireEaPortal(request);
-  if (!gate.ok) return gate.response;
+  try {
+    const gate = await requireEaPortal(request);
+    if (!gate.ok) return gate.response;
 
-  const where = areaFilterForScope(gate.scope);
+    const where = areaFilterForScope(gate.scope);
 
-  // Keep portal + delegate areas aligned with the canonical 34-area list.
-  if (gate.full) {
-    await syncKoforiduaElectoralAreas('Ghana');
-    const portalCount = await prisma.eaPortalArea.count({ where });
-    if (portalCount === 0) {
-      const delegateCount = await prisma.electoralArea.count();
-      if (delegateCount > 0) {
-        await syncEaPortalAreasFromDelegate('Ghana');
+    if (gate.full) {
+      const portalCount = await prisma.eaPortalArea.count({ where });
+      if (portalCount < KOFORIDUA_ELECTORAL_AREAS.length) {
+        const sync = await syncKoforiduaElectoralAreas('Ghana');
+        if (sync.errors.length > 0) {
+          console.warn('Koforidua area sync partial errors:', sync.errors);
+        }
+        if (portalCount === 0) {
+          const delegateCount = await prisma.electoralArea.count();
+          if (delegateCount > 0) {
+            await syncEaPortalAreasFromDelegate('Ghana');
+          }
+        }
       }
     }
-  }
 
-  const areas = await prisma.eaPortalArea.findMany({
-    where,
-    include: {
-      _count: { select: { records: true, userLinks: true } },
-    },
-  });
-  return NextResponse.json(sortByKoforiduaAreaOrder(areas));
+    const areas = await prisma.eaPortalArea.findMany({
+      where,
+      include: {
+        _count: { select: { records: true, userLinks: true } },
+      },
+    });
+    return NextResponse.json(sortByKoforiduaAreaOrder(areas));
+  } catch (e) {
+    console.error('GET /api/ea-portal/areas failed:', e);
+    const message = e instanceof Error ? e.message : 'Failed to load electoral areas';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {

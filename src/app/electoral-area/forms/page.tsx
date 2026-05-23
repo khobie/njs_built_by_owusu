@@ -7,9 +7,11 @@ import {
   EA_FORM_STATUSES,
   EA_FORM_DELEGATE_TYPES,
   EA_FORM_NUMBER_MAX_LEN,
+  EA_VOTER_ID_MAX_LEN,
   type EaFormDelegateType,
 } from '@/lib/ea-portal-form-constants';
 import { notifyEaPortalRefresh } from '@/lib/ea-portal-refresh';
+import { EaPassportPhotoField } from '@/components/ea-portal/EaPassportPhotoField';
 
 type AreaOpt = {
   id: string;
@@ -31,6 +33,8 @@ type FormRow = {
   firstName: string;
   middleName: string | null;
   phone: string;
+  voterId: string | null;
+  hasPassportPhoto?: boolean;
   gender: string | null;
   address: string | null;
   electoralAreaId: string;
@@ -81,6 +85,8 @@ export default function ElectoralAreaFormsPage() {
     pollingStationName: '',
     formNumber: '',
     phone: '',
+    voterId: '',
+    passportPhoto: null as string | null,
     surname: '',
     firstName: '',
     middleName: '',
@@ -120,6 +126,8 @@ export default function ElectoralAreaFormsPage() {
     firstName: '',
     middleName: '',
     phone: '',
+    voterId: '',
+    passportPhoto: null as string | null,
     electoralAreaId: '',
     pollingStationCode: '',
     pollingStationName: '',
@@ -135,7 +143,7 @@ export default function ElectoralAreaFormsPage() {
     setAreasLoading(true);
     setAreasLoadErr('');
     try {
-      const res = await fetch('/api/ea-portal/areas', { cache: 'no-store' });
+      const res = await fetch('/api/ea-portal/areas', { cache: 'no-store', credentials: 'include' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setAreas([]);
@@ -158,6 +166,9 @@ export default function ElectoralAreaFormsPage() {
           'No electoral areas are set up yet. An admin can load them from the delegate database under EA Portal → Areas, or run database seed.'
         );
       }
+    } catch {
+      setAreas([]);
+      setAreasLoadErr('Could not load electoral areas. Check your connection and try again.');
     } finally {
       setAreasLoading(false);
     }
@@ -326,6 +337,8 @@ export default function ElectoralAreaFormsPage() {
           firstName: issue.firstName.trim(),
           middleName: issue.middleName.trim() || null,
           phone: issue.phone,
+          voterId: issue.voterId.trim() || null,
+          passportPhoto: issue.passportPhoto,
           electoralAreaId: issue.electoralAreaId,
           pollingStationCode: issue.pollingStationCode.trim(),
           pollingStationName: issue.pollingStationName.trim(),
@@ -347,6 +360,8 @@ export default function ElectoralAreaFormsPage() {
         ...issue,
         formNumber: '',
         phone: '',
+        voterId: '',
+        passportPhoto: null,
         surname: '',
         firstName: '',
         middleName: '',
@@ -366,15 +381,25 @@ export default function ElectoralAreaFormsPage() {
     setModal(r);
     setEditStationQuery('');
     setEditStationHits([]);
-    const stRes = await fetch(
-      `/api/ea-portal/polling-stations/list?eaPortalAreaId=${encodeURIComponent(r.electoralAreaId)}`
-    );
+    const [stRes, detailRes] = await Promise.all([
+      fetch(`/api/ea-portal/polling-stations/list?eaPortalAreaId=${encodeURIComponent(r.electoralAreaId)}`),
+      fetch(`/api/ea-portal/forms/${r.id}`),
+    ]);
     if (stRes.ok) setStationList(await stRes.json());
+    let passportPhoto: string | null = null;
+    let voterId = r.voterId ?? '';
+    if (detailRes.ok) {
+      const detail = (await detailRes.json()) as { passportPhoto?: string | null; voterId?: string | null };
+      passportPhoto = detail.passportPhoto ?? null;
+      voterId = detail.voterId ?? '';
+    }
     setEdit({
       surname: r.surname,
       firstName: r.firstName,
       middleName: r.middleName ?? '',
       phone: r.phone,
+      voterId,
+      passportPhoto,
       electoralAreaId: r.electoralAreaId,
       pollingStationCode: r.pollingStationCode ?? '',
       pollingStationName: r.pollingStationName ?? '',
@@ -412,6 +437,8 @@ export default function ElectoralAreaFormsPage() {
           firstName: edit.firstName.trim(),
           middleName: edit.middleName.trim() || null,
           phone: edit.phone,
+          voterId: edit.voterId.trim() || null,
+          passportPhoto: edit.passportPhoto,
           electoralAreaId: edit.electoralAreaId,
           pollingStationCode: edit.pollingStationCode.trim(),
           pollingStationName: edit.pollingStationName.trim(),
@@ -527,8 +554,8 @@ export default function ElectoralAreaFormsPage() {
           </div>
 
           <div>
-            <div className="ea-form-step-label">Step 3 · Form number &amp; phone</div>
-            <div className="grid-2">
+            <div className="ea-form-step-label">Step 3 · Form number, phone &amp; voter ID</div>
+            <div className="grid-3">
               <div className="form-group">
                 <label>Form number</label>
                 <label className="ea-check-label" style={{ paddingTop: 0, marginBottom: '0.35rem' }}>
@@ -567,6 +594,22 @@ export default function ElectoralAreaFormsPage() {
                   onChange={(e) => setIssue((x) => ({ ...x, phone: e.target.value }))}
                 />
               </div>
+              <div className="form-group">
+                <label>Voter ID (Voters Card)</label>
+                <input
+                  className="input"
+                  autoComplete="off"
+                  maxLength={EA_VOTER_ID_MAX_LEN}
+                  placeholder="e.g. 1234567890"
+                  value={issue.voterId}
+                  onChange={(e) =>
+                    setIssue((x) => ({
+                      ...x,
+                      voterId: e.target.value.replace(/\s+/g, '').toUpperCase().slice(0, EA_VOTER_ID_MAX_LEN),
+                    }))
+                  }
+                />
+              </div>
             </div>
           </div>
 
@@ -603,7 +646,19 @@ export default function ElectoralAreaFormsPage() {
           </div>
 
           <div>
-            <div className="ea-form-step-label">Step 5 · Position &amp; delegate type</div>
+            <div className="ea-form-step-label">Step 5 · Passport photo</div>
+            <div className="form-group">
+              <label>Passport picture</label>
+              <EaPassportPhotoField
+                value={issue.passportPhoto}
+                onChange={(passportPhoto) => setIssue((x) => ({ ...x, passportPhoto }))}
+                disabled={busyIssue}
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="ea-form-step-label">Step 6 · Position &amp; delegate type</div>
             <div className="grid-2">
               <div className="form-group">
                 <label>Position applied for</label>
@@ -642,7 +697,7 @@ export default function ElectoralAreaFormsPage() {
           </div>
 
           <div>
-            <div className="ea-form-step-label">Step 6 · Comment &amp; issue date</div>
+            <div className="ea-form-step-label">Step 7 · Comment &amp; issue date</div>
             <div className="form-group">
               <label>Comment</label>
               <textarea
@@ -734,7 +789,7 @@ export default function ElectoralAreaFormsPage() {
             <label>Search</label>
             <input
               className="input"
-              placeholder="Name, phone, form #, comment"
+              placeholder="Name, phone, voter ID, form #, comment"
               value={fltQ}
               onChange={(e) => setFltQ(e.target.value)}
             />
@@ -750,6 +805,8 @@ export default function ElectoralAreaFormsPage() {
                   <th>Form #</th>
                   <th>Name</th>
                   <th>Phone</th>
+                  <th>Voter ID</th>
+                  <th>Photo</th>
                   <th>Area</th>
                   <th>Position</th>
                   <th>Delegate</th>
@@ -765,6 +822,8 @@ export default function ElectoralAreaFormsPage() {
                     <td style={{ fontWeight: 600 }}>{r.formNumber}</td>
                     <td>{r.fullName}</td>
                     <td>{r.phone}</td>
+                    <td style={{ fontSize: '0.8rem' }}>{r.voterId || '—'}</td>
+                    <td>{r.hasPassportPhoto ? 'Yes' : '—'}</td>
                     <td>{r.electoralArea.name}</td>
                     <td style={{ fontSize: '0.8rem' }}>{r.position}</td>
                     <td>{r.delegateType === 'OLD' ? 'Old delegate' : 'New delegate'}</td>
@@ -889,7 +948,7 @@ export default function ElectoralAreaFormsPage() {
                   />
                 </div>
               </div>
-              <div className="grid-2">
+              <div className="grid-3">
                 <div className="form-group">
                   <label>Phone</label>
                   <input
@@ -900,6 +959,22 @@ export default function ElectoralAreaFormsPage() {
                     placeholder="e.g. 0241234567"
                     value={edit.phone}
                     onChange={(e) => setEdit((x) => ({ ...x, phone: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Voter ID (Voters Card)</label>
+                  <input
+                    className="input"
+                    autoComplete="off"
+                    maxLength={EA_VOTER_ID_MAX_LEN}
+                    placeholder="Optional"
+                    value={edit.voterId}
+                    onChange={(e) =>
+                      setEdit((x) => ({
+                        ...x,
+                        voterId: e.target.value.replace(/\s+/g, '').toUpperCase().slice(0, EA_VOTER_ID_MAX_LEN),
+                      }))
+                    }
                   />
                 </div>
                 <div className="form-group">
@@ -948,6 +1023,14 @@ export default function ElectoralAreaFormsPage() {
                     onChange={(e) => setEdit((x) => ({ ...x, dateIssued: e.target.value }))}
                   />
                 </div>
+              </div>
+              <div className="form-group">
+                <label>Passport picture</label>
+                <EaPassportPhotoField
+                  value={edit.passportPhoto}
+                  onChange={(passportPhoto) => setEdit((x) => ({ ...x, passportPhoto }))}
+                  disabled={saving}
+                />
               </div>
               <div className="form-group">
                 <label>Comment</label>
