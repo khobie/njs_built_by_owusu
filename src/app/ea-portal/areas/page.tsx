@@ -31,8 +31,9 @@ export default function EaPortalAreasPage() {
   });
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/ea-portal/areas', { cache: 'no-store' });
-    const s = await fetch('/api/auth/session');
+    setErr('');
+    const res = await fetch('/api/ea-portal/areas', { cache: 'no-store', credentials: 'include' });
+    const s = await fetch('/api/auth/session', { credentials: 'include' });
     if (s.ok) {
       const j = await s.json();
       const r = j?.user?.role as string;
@@ -41,7 +42,8 @@ export default function EaPortalAreasPage() {
       );
     }
     if (!res.ok) {
-      setErr('Failed to load areas');
+      const data = await res.json().catch(() => ({}));
+      setErr((data as { error?: string }).error || 'Failed to load areas');
       return;
     }
     setAreas(await res.json());
@@ -95,6 +97,7 @@ export default function EaPortalAreasPage() {
       const res = await fetch('/api/ea-portal/areas/import-from-delegate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ region: loadRegion.trim() || 'Ghana' }),
       });
       const data = await res.json();
@@ -170,6 +173,16 @@ export default function EaPortalAreasPage() {
               </tr>
             </thead>
             <tbody>
+              {areas.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: '1rem', color: 'var(--gray-600)' }}>
+                    No areas yet.
+                    {full
+                      ? ' Click “Load electorals from delegate DB” to create the 34 Koforidua areas on production.'
+                      : ' Ask an admin to set up electoral areas.'}
+                  </td>
+                </tr>
+              ) : null}
               {areas.map((a) => (
                 <tr key={a.id}>
                   <td>{a.name}</td>

@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logEaPortalActivity } from '@/lib/ea-portal-access';
 import { syncEaPortalAreasFromDelegate } from '@/lib/ea-portal-areas-sync';
+import { syncKoforiduaElectoralAreas } from '@/lib/koforidua-electoral-areas-sync';
 import { requireEaPortal } from '@/lib/ea-portal-session';
+
+export const maxDuration = 60;
 
 const bodySchema = z
   .object({
@@ -34,6 +37,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const koforidua = await syncKoforiduaElectoralAreas(regionDefault);
   const result = await syncEaPortalAreasFromDelegate(regionDefault);
 
   await logEaPortalActivity({
@@ -42,5 +46,5 @@ export async function POST(request: NextRequest) {
     details: `${result.created} created, ${result.skipped} already linked`,
   });
 
-  return NextResponse.json(result);
+  return NextResponse.json({ ...result, koforidua });
 }
