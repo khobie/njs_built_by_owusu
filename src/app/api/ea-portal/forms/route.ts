@@ -8,7 +8,6 @@ import {
   EA_FORM_LIST_SELECT,
   isEaFormDelegateType,
   isEaFormPosition,
-  isValidEaPassportPhotoDataUrl,
   normalizeEaFormPhone,
   normalizeEaVoterId,
 } from '@/lib/ea-portal-form-constants';
@@ -53,18 +52,7 @@ const postSchema = z.object({
   issuedAt: z.string().optional(),
   sourceCandidateId: z.string().optional().nullable(),
   voterId: z.string().optional().nullable(),
-  passportPhoto: z.string().optional().nullable(),
 });
-
-async function attachHasPassportPhoto<T extends { id: string }>(rows: T[]) {
-  if (rows.length === 0) return rows.map((r) => ({ ...r, hasPassportPhoto: false }));
-  const withPhoto = await prisma.eaPortalIssuedForm.findMany({
-    where: { id: { in: rows.map((r) => r.id) }, passportPhoto: { not: null } },
-    select: { id: true },
-  });
-  const photoIds = new Set(withPhoto.map((r) => r.id));
-  return rows.map((r) => ({ ...r, hasPassportPhoto: photoIds.has(r.id) }));
-}
 
 function buildListWhere(
   gateScope: string[] | null,
@@ -148,11 +136,11 @@ export async function GET(request: NextRequest) {
         issuedBy: { select: { id: true, name: true, email: true } },
       },
     });
-    const filtered = rows.filter((r) => keys.has(`${r.pollingStationCode}\t${r.position}`));
-    const withFlags = await attachHasPassportPhoto(
-      filtered.map((r) => ({ ...r, status: normalizeEaFormStatus(r.status) }))
+    return NextResponse.json(
+      rows
+        .filter((r) => keys.has(`${r.pollingStationCode}\t${r.position}`))
+        .map((r) => ({ ...r, status: normalizeEaFormStatus(r.status) }))
     );
-    return NextResponse.json(withFlags);
   }
 
   const rows = await prisma.eaPortalIssuedForm.findMany({
@@ -165,10 +153,7 @@ export async function GET(request: NextRequest) {
       issuedBy: { select: { id: true, name: true, email: true } },
     },
   });
-  const withFlags = await attachHasPassportPhoto(
-    rows.map((r) => ({ ...r, status: normalizeEaFormStatus(r.status) }))
-  );
-  return NextResponse.json(withFlags);
+  return NextResponse.json(rows.map((r) => ({ ...r, status: normalizeEaFormStatus(r.status) })));
 }
 
 export async function POST(request: NextRequest) {
@@ -237,12 +222,8 @@ export async function POST(request: NextRequest) {
     }
 
     const voterId = body.voterId ? normalizeEaVoterId(body.voterId) : null;
-    const passportPhoto = body.passportPhoto?.trim() || null;
     if (voterId && voterId.length > 20) {
       return NextResponse.json({ error: 'Voter ID is too long (max 20 characters).' }, { status: 400 });
-    }
-    if (!isValidEaPassportPhotoDataUrl(passportPhoto)) {
-      return NextResponse.json({ error: 'Invalid passport photo.' }, { status: 400 });
     }
 
     const created = await prisma.eaPortalIssuedForm.create({
@@ -253,7 +234,6 @@ export async function POST(request: NextRequest) {
         fullName,
         phone,
         voterId: voterId || null,
-        passportPhoto,
         electoralAreaId: body.electoralAreaId,
         pollingStationCode,
         pollingStationName,

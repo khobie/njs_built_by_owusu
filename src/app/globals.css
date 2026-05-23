@@ -2064,66 +2064,6 @@ tr.editing-row:hover {
   padding-top: 1.5rem;
 }
 
-.ea-passport-photo-field {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  align-items: flex-start;
-}
-
-.ea-passport-photo-preview {
-  width: 124px;
-  height: 160px;
-  flex-shrink: 0;
-  border: 2px solid #cc0000;
-  border-radius: 4px;
-  overflow: hidden;
-  background: #cc0000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ea-passport-photo-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.ea-passport-photo-placeholder {
-  font-size: 0.72rem;
-  color: #fff;
-  text-align: center;
-  padding: 0.5rem;
-}
-
-.ea-passport-photo-actions {
-  flex: 1;
-  min-width: 200px;
-}
-
-.ea-passport-photo-hint {
-  font-size: 0.75rem;
-  color: var(--gray-500, #64748b);
-  margin: 0.5rem 0 0;
-}
-
-.ea-passport-photo-err {
-  font-size: 0.8rem;
-  color: var(--danger, #b91c1c);
-  margin: 0.35rem 0 0;
-}
-
-.ea-passport-photo-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-}
-
 /* Tailwind — scoped to .ea-portal-app via tailwind.config important */
 @tailwind base;
 @tailwind components;

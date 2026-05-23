@@ -11,7 +11,6 @@ import {
   type EaFormDelegateType,
 } from '@/lib/ea-portal-form-constants';
 import { notifyEaPortalRefresh } from '@/lib/ea-portal-refresh';
-import { EaPassportPhotoField } from '@/components/ea-portal/EaPassportPhotoField';
 
 type AreaOpt = {
   id: string;
@@ -34,7 +33,6 @@ type FormRow = {
   middleName: string | null;
   phone: string;
   voterId: string | null;
-  hasPassportPhoto?: boolean;
   gender: string | null;
   address: string | null;
   electoralAreaId: string;
@@ -86,7 +84,6 @@ export default function ElectoralAreaFormsPage() {
     formNumber: '',
     phone: '',
     voterId: '',
-    passportPhoto: null as string | null,
     surname: '',
     firstName: '',
     middleName: '',
@@ -127,7 +124,6 @@ export default function ElectoralAreaFormsPage() {
     middleName: '',
     phone: '',
     voterId: '',
-    passportPhoto: null as string | null,
     electoralAreaId: '',
     pollingStationCode: '',
     pollingStationName: '',
@@ -338,7 +334,6 @@ export default function ElectoralAreaFormsPage() {
           middleName: issue.middleName.trim() || null,
           phone: issue.phone,
           voterId: issue.voterId.trim() || null,
-          passportPhoto: issue.passportPhoto,
           electoralAreaId: issue.electoralAreaId,
           pollingStationCode: issue.pollingStationCode.trim(),
           pollingStationName: issue.pollingStationName.trim(),
@@ -361,7 +356,6 @@ export default function ElectoralAreaFormsPage() {
         formNumber: '',
         phone: '',
         voterId: '',
-        passportPhoto: null,
         surname: '',
         firstName: '',
         middleName: '',
@@ -381,25 +375,16 @@ export default function ElectoralAreaFormsPage() {
     setModal(r);
     setEditStationQuery('');
     setEditStationHits([]);
-    const [stRes, detailRes] = await Promise.all([
-      fetch(`/api/ea-portal/polling-stations/list?eaPortalAreaId=${encodeURIComponent(r.electoralAreaId)}`),
-      fetch(`/api/ea-portal/forms/${r.id}`),
-    ]);
+    const stRes = await fetch(
+      `/api/ea-portal/polling-stations/list?eaPortalAreaId=${encodeURIComponent(r.electoralAreaId)}`
+    );
     if (stRes.ok) setStationList(await stRes.json());
-    let passportPhoto: string | null = null;
-    let voterId = r.voterId ?? '';
-    if (detailRes.ok) {
-      const detail = (await detailRes.json()) as { passportPhoto?: string | null; voterId?: string | null };
-      passportPhoto = detail.passportPhoto ?? null;
-      voterId = detail.voterId ?? '';
-    }
     setEdit({
       surname: r.surname,
       firstName: r.firstName,
       middleName: r.middleName ?? '',
       phone: r.phone,
-      voterId,
-      passportPhoto,
+      voterId: r.voterId ?? '',
       electoralAreaId: r.electoralAreaId,
       pollingStationCode: r.pollingStationCode ?? '',
       pollingStationName: r.pollingStationName ?? '',
@@ -438,7 +423,6 @@ export default function ElectoralAreaFormsPage() {
           middleName: edit.middleName.trim() || null,
           phone: edit.phone,
           voterId: edit.voterId.trim() || null,
-          passportPhoto: edit.passportPhoto,
           electoralAreaId: edit.electoralAreaId,
           pollingStationCode: edit.pollingStationCode.trim(),
           pollingStationName: edit.pollingStationName.trim(),
@@ -646,19 +630,7 @@ export default function ElectoralAreaFormsPage() {
           </div>
 
           <div>
-            <div className="ea-form-step-label">Step 5 · Passport photo</div>
-            <div className="form-group">
-              <label>Passport picture</label>
-              <EaPassportPhotoField
-                value={issue.passportPhoto}
-                onChange={(passportPhoto) => setIssue((x) => ({ ...x, passportPhoto }))}
-                disabled={busyIssue}
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="ea-form-step-label">Step 6 · Position &amp; delegate type</div>
+            <div className="ea-form-step-label">Step 5 · Position &amp; delegate type</div>
             <div className="grid-2">
               <div className="form-group">
                 <label>Position applied for</label>
@@ -697,7 +669,7 @@ export default function ElectoralAreaFormsPage() {
           </div>
 
           <div>
-            <div className="ea-form-step-label">Step 7 · Comment &amp; issue date</div>
+            <div className="ea-form-step-label">Step 6 · Comment &amp; issue date</div>
             <div className="form-group">
               <label>Comment</label>
               <textarea
@@ -806,7 +778,6 @@ export default function ElectoralAreaFormsPage() {
                   <th>Name</th>
                   <th>Phone</th>
                   <th>Voter ID</th>
-                  <th>Photo</th>
                   <th>Area</th>
                   <th>Position</th>
                   <th>Delegate</th>
@@ -823,7 +794,6 @@ export default function ElectoralAreaFormsPage() {
                     <td>{r.fullName}</td>
                     <td>{r.phone}</td>
                     <td style={{ fontSize: '0.8rem' }}>{r.voterId || '—'}</td>
-                    <td>{r.hasPassportPhoto ? 'Yes' : '—'}</td>
                     <td>{r.electoralArea.name}</td>
                     <td style={{ fontSize: '0.8rem' }}>{r.position}</td>
                     <td>{r.delegateType === 'OLD' ? 'Old delegate' : 'New delegate'}</td>
@@ -1023,14 +993,6 @@ export default function ElectoralAreaFormsPage() {
                     onChange={(e) => setEdit((x) => ({ ...x, dateIssued: e.target.value }))}
                   />
                 </div>
-              </div>
-              <div className="form-group">
-                <label>Passport picture</label>
-                <EaPassportPhotoField
-                  value={edit.passportPhoto}
-                  onChange={(passportPhoto) => setEdit((x) => ({ ...x, passportPhoto }))}
-                  disabled={saving}
-                />
               </div>
               <div className="form-group">
                 <label>Comment</label>

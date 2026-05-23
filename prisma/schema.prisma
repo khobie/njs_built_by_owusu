@@ -163,8 +163,6 @@ model EaPortalIssuedForm {
   phone                String
   /// Voters Card / voter ID number (optional).
   voterId              String?
-  /// JPEG data URL — passport photo with standard red background (processed on upload).
-  passportPhoto        String?  @db.Text
   gender               String?
   address              String?
   electoralAreaId      String
