@@ -145,6 +145,7 @@ const userSelect = {
   email: true,
   role: true,
   isActive: true,
+  suspendedUntil: true,
   createdAt: true,
 } as const;
 
@@ -180,7 +181,7 @@ export async function clearUserAccount(targetUserId: string, actor: AccountActor
     await tx.userEaPortalArea.deleteMany({ where: { userId: targetUserId } });
     await tx.user.update({
       where: { id: targetUserId },
-      data: { isActive: false },
+      data: { isActive: false, suspendedUntil: null },
     });
   });
 
@@ -220,4 +221,46 @@ export async function deleteUserAccount(targetUserId: string, actor: AccountActo
   });
 
   return { deleted: true, email: target.email, reassignedForms: issuedCount };
+}
+
+/** Temporarily block sign-in until the given time; user record stays active. */
+export async function suspendUserAccount(
+  targetUserId: string,
+  until: Date,
+  actor: AccountActor
+) {
+  const target = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, role: true, email: true },
+  });
+  if (!target) throw new UserAccountError('User not found.', 404);
+
+  assertCanManageTargetUser(actor, target);
+
+  if (until.getTime() <= Date.now()) {
+    throw new UserAccountError('Access time must be in the future.', 400);
+  }
+
+  return prisma.user.update({
+    where: { id: targetUserId },
+    data: { suspendedUntil: until, isActive: true },
+    select: userSelect,
+  });
+}
+
+/** Remove a temporary suspension so the user can sign in immediately. */
+export async function unsuspendUserAccount(targetUserId: string, actor: AccountActor) {
+  const target = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, role: true, email: true },
+  });
+  if (!target) throw new UserAccountError('User not found.', 404);
+
+  assertCanManageTargetUser(actor, target);
+
+  return prisma.user.update({
+    where: { id: targetUserId },
+    data: { suspendedUntil: null },
+    select: userSelect,
+  });
 }

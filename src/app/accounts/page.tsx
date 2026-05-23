@@ -5,6 +5,7 @@ import { AppShell } from '@/components/dashboard/AppShell';
 import { needsEaPortalAreaAssignment } from '@/lib/ea-portal-user-roles';
 import { isAdminRole } from '@/lib/roles';
 import { creatableRolesForActor, userRoleLabel } from '@/lib/user-role-labels';
+import { formatAccessRestoreTime, isCurrentlySuspended } from '@/lib/user-suspension';
 
 type Role =
   | 'SUPER_ADMIN'
@@ -36,6 +37,7 @@ interface UserRow {
   email: string;
   role: Role;
   isActive: boolean;
+  suspendedUntil: string | null;
   electoralAreas: { areaCode: string }[];
   eaPortalAreas: { eaPortalAreaId: string }[];
 }
@@ -76,6 +78,10 @@ export default function AccountsPage() {
   const [vettingAssignCodes, setVettingAssignCodes] = useState<string[]>([]);
   const [vettingAssignSaving, setVettingAssignSaving] = useState(false);
 
+  const [suspendUser, setSuspendUser] = useState<UserRow | null>(null);
+  const [suspendUntilInput, setSuspendUntilInput] = useState('');
+  const [suspendSaving, setSuspendSaving] = useState(false);
+
   const areaCodeSet = useMemo(() => new Set(areaCodes), [areaCodes]);
   const eaPortalAreaIdSet = useMemo(() => new Set(eaPortalAreaIds), [eaPortalAreaIds]);
 
@@ -103,6 +109,7 @@ export default function AccountsPage() {
             const u = row as UserRow;
             return {
               ...u,
+              suspendedUntil: u.suspendedUntil ?? null,
               eaPortalAreas: u.eaPortalAreas ?? [],
               electoralAreas: u.electoralAreas ?? [],
             };
@@ -313,6 +320,67 @@ export default function AccountsPage() {
       body: JSON.stringify({ isActive: !u.isActive }),
     });
     await load();
+  };
+
+  const openSuspendModal = (u: UserRow) => {
+    setError('');
+    setSuspendUser(u);
+    const defaultUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    defaultUntil.setMinutes(0, 0, 0);
+    defaultUntil.setHours(defaultUntil.getHours() + 1);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    setSuspendUntilInput(
+      `${defaultUntil.getFullYear()}-${pad(defaultUntil.getMonth() + 1)}-${pad(defaultUntil.getDate())}T${pad(defaultUntil.getHours())}:${pad(defaultUntil.getMinutes())}`,
+    );
+  };
+
+  const saveSuspension = async () => {
+    if (!suspendUser) return;
+    setSuspendSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/users/${suspendUser.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suspendUntil: suspendUntilInput }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data as { error?: string }).error || 'Failed to suspend account.');
+        return;
+      }
+      setSuspendUser(null);
+      setCreateSuccess(`Account suspended until access is restored for ${suspendUser.email}.`);
+      await load();
+    } finally {
+      setSuspendSaving(false);
+    }
+  };
+
+  const unsuspendAccount = async (u: UserRow) => {
+    const ok = window.confirm(`Remove suspension for ${u.name} (${u.email})? They can sign in immediately.`);
+    if (!ok) return;
+    setError('');
+    const res = await fetch(`/api/users/${u.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unsuspend: true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError((data as { error?: string }).error || 'Failed to remove suspension.');
+      return;
+    }
+    setCreateSuccess(`Suspension removed for ${u.email}.`);
+    await load();
+  };
+
+  const userStatusLabel = (u: UserRow) => {
+    if (!u.isActive) return 'Inactive';
+    if (u.suspendedUntil && isCurrentlySuspended(new Date(u.suspendedUntil))) {
+      return `Suspended until ${formatAccessRestoreTime(new Date(u.suspendedUntil))}`;
+    }
+    return 'Active';
   };
 
   const clearAccount = async (u: UserRow) => {
@@ -614,7 +682,7 @@ export default function AccountsPage() {
                         <td title={u.role}>{userRoleLabel(u.role)}</td>
                         <td>{u.electoralAreas.map((a) => a.areaCode).join(', ') || '—'}</td>
                         <td style={{ maxWidth: '14rem', fontSize: '0.85rem', verticalAlign: 'top' }}>{portalNamesForUser(u)}</td>
-                        <td>{u.isActive ? 'Active' : 'Inactive'}</td>
+                        <td style={{ maxWidth: '14rem', fontSize: '0.85rem' }}>{userStatusLabel(u)}</td>
                         <td>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <button className="btn btn-secondary btn-sm" onClick={() => void toggleActive(u)}>
@@ -639,6 +707,23 @@ export default function AccountsPage() {
                             ) : null}
                             {u.id !== meId ? (
                               <>
+                                {u.suspendedUntil && isCurrentlySuspended(new Date(u.suspendedUntil)) ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => void unsuspendAccount(u)}
+                                  >
+                                    Unsuspend
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => openSuspendModal(u)}
+                                  >
+                                    Suspend
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   className="btn btn-secondary btn-sm"
@@ -734,6 +819,71 @@ export default function AccountsPage() {
                 onClick={() => void saveVettingAssignments()}
               >
                 {vettingAssignSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {suspendUser ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="suspend-user-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem',
+          }}
+          onClick={() => {
+            if (!suspendSaving) setSuspendUser(null);
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--surface, #fff)',
+              padding: '1.25rem',
+              borderRadius: '10px',
+              maxWidth: '28rem',
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="suspend-user-title" style={{ marginTop: 0 }}>
+              Suspend account — {suspendUser.name}
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+              The user cannot sign in until the time below. They will see a message telling them when
+              they can access the site again.
+            </p>
+            <div className="form-group">
+              <label>Can access site again at</label>
+              <input
+                className="input"
+                type="datetime-local"
+                value={suspendUntilInput}
+                onChange={(e) => setSuspendUntilInput(e.target.value)}
+                disabled={suspendSaving}
+                required
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={suspendSaving}
+                onClick={() => setSuspendUser(null)}
+              >
+                Cancel
+              </button>
+              <button type="button" className="btn btn-danger" disabled={suspendSaving} onClick={() => void saveSuspension()}>
+                {suspendSaving ? 'Suspending…' : 'Suspend account'}
               </button>
             </div>
           </div>

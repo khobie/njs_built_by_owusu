@@ -9,10 +9,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [accessMessage, setAccessMessage] = useState('');
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setAccessMessage('');
     setLoading(true);
     try {
       const res = await fetch('/api/auth/login', {
@@ -22,7 +24,12 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data?.error || 'Login failed');
+        if (data?.code === 'SUSPENDED' && data?.accessMessage) {
+          setAccessMessage(data.accessMessage);
+          setError(data.error || 'Your account is suspended.');
+        } else {
+          setError(data?.error || 'Login failed');
+        }
         return;
       }
       router.push('/');
@@ -52,6 +59,24 @@ export default function LoginPage() {
             <p>Sign in to access role-based dashboards and actions.</p>
           </div>
           {error ? <div className="error">{error}</div> : null}
+          {accessMessage ? (
+            <div
+              role="status"
+              style={{
+                marginBottom: '1rem',
+                padding: '0.85rem 1rem',
+                borderRadius: '8px',
+                background: 'rgba(245, 158, 11, 0.12)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
+                color: '#92400e',
+                fontSize: '0.95rem',
+                lineHeight: 1.5,
+              }}
+            >
+              <strong style={{ display: 'block', marginBottom: '0.25rem' }}>Access temporarily restricted</strong>
+              {accessMessage}
+            </div>
+          ) : null}
           <form onSubmit={onSubmit} className="glass-login-form">
             <div className="form-group">
               <label>Username or email</label>

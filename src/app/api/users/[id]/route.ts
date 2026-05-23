@@ -6,9 +6,12 @@ import { isAdminRole, isSuperAdminRole, ROLES } from '@/lib/roles';
 import {
   clearUserAccount,
   deleteUserAccount,
+  suspendUserAccount,
+  unsuspendUserAccount,
   UserAccountError,
   validateRoleAssignment,
 } from '@/lib/user-account';
+import { parseSuspendUntilInput } from '@/lib/user-suspension';
 import bcrypt from 'bcryptjs';
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
@@ -26,6 +29,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     eaPortalAreaIds,
     password,
     clearAccount,
+    suspendUntil,
+    unsuspend,
   } = body as {
     name?: string;
     role?: string;
@@ -34,7 +39,39 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     eaPortalAreaIds?: string[];
     password?: string;
     clearAccount?: boolean;
+    suspendUntil?: string;
+    unsuspend?: boolean;
   };
+
+  if (unsuspend === true) {
+    try {
+      const updated = await unsuspendUserAccount(id, sessionUser);
+      return NextResponse.json(updated);
+    } catch (e) {
+      if (e instanceof UserAccountError) {
+        return NextResponse.json({ error: e.message }, { status: e.status });
+      }
+      console.error(e);
+      return NextResponse.json({ error: 'Failed to unsuspend account' }, { status: 500 });
+    }
+  }
+
+  if (suspendUntil !== undefined) {
+    const parsed = parseSuspendUntilInput(suspendUntil);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
+    try {
+      const updated = await suspendUserAccount(id, parsed.until, sessionUser);
+      return NextResponse.json(updated);
+    } catch (e) {
+      if (e instanceof UserAccountError) {
+        return NextResponse.json({ error: e.message }, { status: e.status });
+      }
+      console.error(e);
+      return NextResponse.json({ error: 'Failed to suspend account' }, { status: 500 });
+    }
+  }
 
   if (clearAccount === true) {
     try {
@@ -93,10 +130,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     data: {
       ...(name !== undefined ? { name: name.trim() } : {}),
       ...(role !== undefined ? { role } : {}),
-      ...(isActive !== undefined ? { isActive } : {}),
+      ...(isActive !== undefined ? { isActive, ...(isActive ? {} : { suspendedUntil: null }) } : {}),
       ...(passwordHash !== undefined ? { passwordHash } : {}),
     },
-    select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, isActive: true, suspendedUntil: true, createdAt: true },
   });
 
   if (areaCodes !== undefined) {

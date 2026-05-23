@@ -97,6 +97,8 @@ model User {
   passwordHash  String
   role          String   @default("ADMIN")
   isActive      Boolean  @default(true)
+  /// When set and in the future, the user cannot sign in until this time.
+  suspendedUntil DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

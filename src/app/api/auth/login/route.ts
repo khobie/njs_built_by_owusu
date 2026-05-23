@@ -3,6 +3,11 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { createAuthToken, getAuthCookieMaxAgeSeconds, getAuthCookieName } from '@/lib/auth';
 import type { Role } from '@/lib/roles';
+import {
+  clearExpiredSuspensionIfNeeded,
+  isCurrentlySuspended,
+  suspensionAccessMessage,
+} from '@/lib/user-suspension';
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,6 +49,21 @@ export async function POST(request: NextRequest) {
         { error: 'Invalid credentials' },
         { status: 401 }
       );
+    }
+
+    if (user.suspendedUntil) {
+      if (isCurrentlySuspended(user.suspendedUntil)) {
+        return NextResponse.json(
+          {
+            error: 'Your account is suspended.',
+            code: 'SUSPENDED',
+            suspendedUntil: user.suspendedUntil.toISOString(),
+            accessMessage: suspensionAccessMessage(user.suspendedUntil),
+          },
+          { status: 403 }
+        );
+      }
+      await clearExpiredSuspensionIfNeeded(user.id, user.suspendedUntil);
     }
 
     const safeUser = {

@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import type { Role } from '@/lib/roles';
+import { clearExpiredSuspensionIfNeeded, isCurrentlySuspended } from '@/lib/user-suspension';
 
 const AUTH_COOKIE = 'auth_token';
 const AUTH_TTL_SECONDS = 60 * 60 * 8; // 8 hours
@@ -72,9 +73,15 @@ export async function getSessionUser(request: NextRequest) {
   if (!payload) return null;
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
-    select: { id: true, name: true, email: true, role: true, isActive: true },
+    select: { id: true, name: true, email: true, role: true, isActive: true, suspendedUntil: true },
   });
   if (!user || !user.isActive) return null;
+
+  if (user.suspendedUntil) {
+    if (isCurrentlySuspended(user.suspendedUntil)) return null;
+    await clearExpiredSuspensionIfNeeded(user.id, user.suspendedUntil);
+  }
+
   return user;
 }
 

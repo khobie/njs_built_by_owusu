@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
       email: true,
       role: true,
       isActive: true,
+      suspendedUntil: true,
       createdAt: true,
       electoralAreas: { select: { areaCode: true } },
       eaPortalAreas: { select: { eaPortalAreaId: true } },
