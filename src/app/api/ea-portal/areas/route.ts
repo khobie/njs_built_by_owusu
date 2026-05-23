@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { areaFilterForScope, logEaPortalActivity } from '@/lib/ea-portal-access';
 import { sortByKoforiduaAreaOrder } from '@/lib/koforidua-electoral-areas';
+import { friendlyDbError } from '@/lib/friendly-db-error';
 import { requireEaPortal } from '@/lib/ea-portal-session';
 
 const createSchema = z.object({
@@ -12,25 +13,6 @@ const createSchema = z.object({
   region: z.string().min(1),
   delegateAreaCode: z.string().optional().nullable(),
 });
-
-function friendlyDbError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  if (msg.includes('Environment variable not found') && msg.includes('DATABASE_URL')) {
-    return 'DATABASE_URL is not set on the server. Add it in Vercel → Settings → Environment Variables.';
-  }
-  if (
-    msg.includes("Can't reach database") ||
-    msg.includes('Connection refused') ||
-    msg.includes('ENOTFOUND') ||
-    msg.includes('timeout')
-  ) {
-    return 'Cannot reach the database. Use a hosted Postgres URL (Neon, Supabase, etc.) in DATABASE_URL — not localhost.';
-  }
-  if (msg.includes('does not exist') || msg.includes('P2021')) {
-    return 'Database tables are missing. Run: npx prisma db push (against your production DATABASE_URL).';
-  }
-  return msg;
-}
 
 /** Fast read-only list — no sync (sync runs via POST import/sync routes to avoid Vercel timeouts). */
 export async function GET(request: NextRequest) {

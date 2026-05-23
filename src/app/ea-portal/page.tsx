@@ -83,8 +83,8 @@ export default function EaPortalDashboardPage() {
   const load = useCallback(async () => {
     setErr('');
     const [dashRes, sessionRes] = await Promise.all([
-      fetch('/api/ea-portal/dashboard', { cache: 'no-store' }),
-      fetch('/api/auth/session'),
+      fetch('/api/ea-portal/dashboard', { cache: 'no-store', credentials: 'include' }),
+      fetch('/api/auth/session', { credentials: 'include' }),
     ]);
     if (sessionRes.ok) {
       const j = await sessionRes.json();
@@ -94,7 +94,8 @@ export default function EaPortalDashboardPage() {
       );
     }
     if (!dashRes.ok) {
-      setErr('Could not load dashboard.');
+      const data = await dashRes.json().catch(() => ({}));
+      setErr((data as { error?: string }).error || 'Could not load dashboard.');
       return;
     }
     setData(await dashRes.json());
