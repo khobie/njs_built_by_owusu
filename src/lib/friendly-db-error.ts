@@ -18,7 +18,7 @@ export function friendlyDbError(e: unknown): string {
     msg.includes('P2021') ||
     (msg.includes('relation') && msg.includes('does not exist'))
   ) {
-    return 'Database tables are missing. Run: npx prisma db push (with your Neon DATABASE_URL), then npm run db:seed';
+    return 'Database tables are missing. On your PC: set DATABASE_URL to your Neon URL, then run npm run db:setup-production';
   }
   return msg;
 }
