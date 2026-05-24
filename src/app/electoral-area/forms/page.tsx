@@ -302,9 +302,12 @@ export default function ElectoralAreaFormsPage() {
         <h1>Electoral Area form issuing</h1>
         <p>
           Register delegates by electoral area and position. The form code is shown below before you submit.
-          View or export issued forms from Reports.
+          Edit existing records under Edit delegates; export from Reports.
         </p>
         <div className="ea-form-issue-header-actions">
+          <Link href="/electoral-area/edit" className="btn btn-secondary btn-sm">
+            Edit delegates
+          </Link>
           <Link href="/ea-portal/reports" className="btn btn-secondary btn-sm">
             Reports &amp; export
           </Link>

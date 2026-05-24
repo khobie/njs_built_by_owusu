@@ -107,6 +107,7 @@ model User {
   eaPortalAreas      UserEaPortalArea[]
   eaPortalIssuedForms   EaPortalIssuedForm[] @relation("EaFormIssuedBy")
   eaPortalVerifiedForms EaPortalIssuedForm[] @relation("EaFormVerifiedBy")
+  pollVotes             SystemPollVote[]
 
   @@map("users")
 }
@@ -243,6 +244,52 @@ model UserElectoralArea {
 
   @@unique([userId, areaCode])
   @@map("user_electoral_areas")
+}
+
+/// System-wide notice board with optional single-choice poll per notice.
+model SystemNotice {
+  id          String    @id @default(cuid())
+  title       String
+  body        String
+  isActive    Boolean   @default(true)
+  hasPoll     Boolean   @default(false)
+  publishedAt DateTime  @default(now())
+  expiresAt   DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  options SystemPollOption[]
+  votes   SystemPollVote[]
+
+  @@index([isActive, publishedAt])
+  @@map("system_notices")
+}
+
+model SystemPollOption {
+  id        String       @id @default(cuid())
+  noticeId  String
+  notice    SystemNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  label     String
+  sortOrder Int          @default(0)
+  votes     SystemPollVote[]
+
+  @@index([noticeId])
+  @@map("system_poll_options")
+}
+
+model SystemPollVote {
+  id        String           @id @default(cuid())
+  noticeId  String
+  notice    SystemNotice     @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  optionId  String
+  option    SystemPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+
+  @@unique([noticeId, userId])
+  @@map("system_poll_votes")
 }
 
 // Role constants: SUPER_ADMIN, ADMIN, EA_PORTAL_ADMIN, EA_FORM_ISSUER, EA_VETTING_PANEL, EA_OFFICER, EA_DATA_ENTRY

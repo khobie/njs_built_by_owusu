@@ -10,7 +10,9 @@ type NavItem = { href: string; label: string; exact?: boolean; matchPrefix?: str
 
 const nav: readonly NavItem[] = [
   { href: '/ea-portal', label: 'Dashboard', exact: true },
+  { href: '/notices', label: 'Notices & polls' },
   { href: '/electoral-area/forms', label: 'Form issuing', matchPrefix: '/electoral-area' },
+  { href: '/electoral-area/edit', label: 'Edit delegates' },
   { href: '/ea-portal/vetting', label: 'Vetting panel' },
   { href: '/ea-portal/contests', label: 'Contests' },
   { href: '/ea-portal/reports', label: 'Reports' },
