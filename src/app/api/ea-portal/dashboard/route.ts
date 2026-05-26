@@ -73,6 +73,8 @@ export async function GET(request: NextRequest) {
         rejectedDelegates: rejected,
         contests: contestStats.contests,
         unopposedPositions: contestStats.unopposed,
+        contestedDelegates: contestStats.contestedDelegates,
+        unopposedDelegates: contestStats.unopposedDelegates,
         newDelegates,
         oldDelegates,
         verificationRate,

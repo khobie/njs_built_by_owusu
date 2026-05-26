@@ -15,6 +15,8 @@ type Dashboard = {
     rejectedDelegates: number;
     contests: number;
     unopposedPositions: number;
+    contestedDelegates: number;
+    unopposedDelegates: number;
     newDelegates: number;
     oldDelegates: number;
     verificationRate: number;
@@ -172,12 +174,18 @@ export default function EaPortalDashboardPage() {
               <div className="value">{t.rejectedDelegates}</div>
             </div>
             <div className="ea-portal-card accent-amber">
-              <h3>Contests</h3>
-              <div className="value">{t.contests}</div>
+              <h3>Contested delegates</h3>
+              <div className="value">{t.contestedDelegates}</div>
+              <span className="ea-card-sub">{t.contests} contested seats</span>
             </div>
             <div className="ea-portal-card">
-              <h3>Unopposed</h3>
-              <div className="value">{t.unopposedPositions}</div>
+              <h3>Unopposed delegates</h3>
+              <div className="value">{t.unopposedDelegates}</div>
+              <span className="ea-card-sub">
+                {t.contestedDelegates + t.unopposedDelegates === t.totalDelegates
+                  ? 'Matches total ✓'
+                  : `${t.contestedDelegates + t.unopposedDelegates} of ${t.totalDelegates}`}
+              </span>
             </div>
             <div className="ea-portal-card">
               <h3>New delegates</h3>

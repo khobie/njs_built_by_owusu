@@ -9,9 +9,28 @@ export async function countContestSlots(where: Prisma.EaPortalIssuedFormWhereInp
     where,
     _count: { _all: true },
   });
-  const contests = groups.filter((g) => g._count._all > 1).length;
-  const unopposed = groups.filter((g) => g._count._all === 1).length;
-  return { contests, unopposed, totalSlots: groups.length, groups };
+  let contests = 0;
+  let unopposed = 0;
+  let contestedDelegates = 0;
+  let unopposedDelegates = 0;
+  for (const g of groups) {
+    const n = g._count._all;
+    if (n > 1) {
+      contests += 1;
+      contestedDelegates += n;
+    } else if (n === 1) {
+      unopposed += 1;
+      unopposedDelegates += n;
+    }
+  }
+  return {
+    contests,
+    unopposed,
+    contestedDelegates,
+    unopposedDelegates,
+    totalSlots: groups.length,
+    groups,
+  };
 }
 
 export async function findDuplicateDelegate(args: {

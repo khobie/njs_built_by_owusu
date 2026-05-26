@@ -30,6 +30,8 @@ type ReportData = {
     issued: number;
     contests: number;
     unopposed: number;
+    contestedDelegateCount: number;
+    unopposedDelegateCount: number;
     newDelegates: number;
     oldDelegates: number;
     verificationRate: number;
@@ -245,8 +247,21 @@ export default function EaPortalReportsPage() {
         { label: 'Total forms', value: s.totalDelegates, sub: `${data.meta.uniqueSlots} area×position slots`, accent: '#3b82f6' },
         { label: 'Verified', value: s.verified, sub: `${s.verificationRate}% of total`, accent: '#22c55e' },
         { label: 'Pending vetting', value: s.pendingVetting, sub: 'Awaiting decision', accent: '#f59e0b' },
-        { label: 'Contested slots', value: s.contests, sub: `${s.contestSlotRate}% of slots`, accent: '#ea580c' },
-        { label: 'Unopposed slots', value: s.unopposed, sub: 'Single applicant', accent: '#6366f1' },
+        {
+          label: 'Contested delegates',
+          value: s.contestedDelegateCount,
+          sub: `${s.contests} seats · ${s.contestSlotRate}% of slots`,
+          accent: '#ea580c',
+        },
+        {
+          label: 'Unopposed delegates',
+          value: s.unopposedDelegateCount,
+          sub:
+            s.contestedDelegateCount + s.unopposedDelegateCount === s.totalDelegates
+              ? 'Matches total ✓'
+              : `+ contested = ${s.contestedDelegateCount + s.unopposedDelegateCount}`,
+          accent: '#6366f1',
+        },
         { label: 'Vetting completion', value: `${s.completionRate}%`, sub: 'Verified + rejected vs returned + pending', accent: '#0d9488' },
       ]
     : [];

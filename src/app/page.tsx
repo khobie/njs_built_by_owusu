@@ -167,16 +167,16 @@ export default function DashboardPage() {
         to: '#15803d',
       },
       {
-        label: 'Contested seats',
-        value: agg.contestedSlots.toLocaleString(),
-        hint: `${CANONICAL_POSITION_COUNT} canonical roles per electoral area; each disputed seat counted once (${agg.delegatesExcludedFromCanonicalGrid > 0 ? `${agg.delegatesExcludedFromCanonicalGrid} delegate rows not mapped to the grid — wrong/missing area or non-canonical role` : 'every row maps to grid or anomaly count is 0'})`,
+        label: 'Contested delegates',
+        value: agg.contestedDelegateCount.toLocaleString(),
+        hint: `People in seats with 2+ applicants (${agg.contestedSlots.toLocaleString()} contested seats). With unopposed delegates below: ${(agg.contestedDelegateCount + agg.unopposedDelegateCount).toLocaleString()} on the ${CANONICAL_POSITION_COUNT}-role grid${agg.delegatesExcludedFromCanonicalGrid > 0 ? `; ${agg.delegatesExcludedFromCanonicalGrid} not on grid` : ''}.`,
         from: '#ef4444',
         to: '#dc2626',
       },
       {
-        label: 'Filled seats',
-        value: agg.unopposedSlots.toLocaleString(),
-        hint: `Exactly one accredited delegate occupying that seat (same ${CANONICAL_POSITION_COUNT}-role grid × ${agg.electoralAreasInScope.toLocaleString()} electoral areas).`,
+        label: 'Unopposed delegates',
+        value: agg.unopposedDelegateCount.toLocaleString(),
+        hint: `People alone in their seat (${agg.unopposedSlots.toLocaleString()} filled seats). Contested + unopposed delegates = ${(agg.contestedDelegateCount + agg.unopposedDelegateCount).toLocaleString()}${agg.contestedDelegateCount + agg.unopposedDelegateCount + agg.delegatesExcludedFromCanonicalGrid === agg.totalDelegates ? ' = total ✓' : `; + ${agg.delegatesExcludedFromCanonicalGrid} off-grid = ${agg.totalDelegates} total`}.`,
         from: '#3b82f6',
         to: '#2563eb',
       },
@@ -501,13 +501,16 @@ export default function DashboardPage() {
                     lineHeight: 1.6,
                   }}
                 >
-                  <strong style={{ color: 'var(--text-primary)' }}>Seven roles per electoral area:</strong>{' '}
-                  CHAIRMAN, SECRETARY, ORGANIZER, WOMEN ORGANIZER, YOUTH ORGANIZER, COMMUNICATION OFFICER, ELECTORAL
-                  AFFAIRS OFFICER. Each contested seat counts once. Grid uses{' '}
-                  {agg.canonicalLogicalSlots.toLocaleString()} seats ({CANONICAL_POSITION_COUNT} ×{' '}
-                  {agg.electoralAreasInScope.toLocaleString()} areas). Delegate rows counted on-grid:{' '}
-                  {agg.delegatesOnCanonicalSlotGrid.toLocaleString()}; excluded (missing area /
-                  non-canonical role): {agg.delegatesExcludedFromCanonicalGrid.toLocaleString()}.
+                  <strong style={{ color: 'var(--text-primary)' }}>Contest math:</strong> Total delegates (
+                  {agg.totalDelegates}) = contested delegates ({agg.contestedDelegateCount}) + unopposed
+                  delegates ({agg.unopposedDelegateCount})
+                  {agg.delegatesExcludedFromCanonicalGrid > 0
+                    ? ` + off-grid (${agg.delegatesExcludedFromCanonicalGrid})`
+                    : ''}
+                  . Seat counts ({agg.contestedSlots} contested + {agg.unopposedSlots} filled +{' '}
+                  {agg.vacantSlots} vacant = {agg.canonicalLogicalSlots} seats) count roles, not people.
+                  Seven roles per area: CHAIRMAN, SECRETARY, ORGANIZER, WOMEN ORGANIZER, YOUTH ORGANIZER,
+                  COMMUNICATION OFFICER, ELECTORAL AFFAIRS OFFICER.
 
                   <div style={{ marginTop: '0.5rem' }}>
                     For vacancy by electoral area, use the sidebar link <strong>Electoral areas</strong> — it is not shown on this
@@ -534,7 +537,7 @@ export default function DashboardPage() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 <div className="dashboard-chart-card">
-                  <h3 className="dashboard-chart-title">Filled vs contested vs vacant (7-role grid)</h3>
+                  <h3 className="dashboard-chart-title">Delegates: contested vs unopposed</h3>
                   <ContestDonut aggregates={agg} />
                 </div>
                 <div className="dashboard-chart-card">

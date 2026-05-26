@@ -34,17 +34,17 @@ export const DelegatesByAreaChart = memo(function DelegatesByAreaChart({ aggrega
 
 export const ContestDonut = memo(function ContestDonut({ aggregates }: Props) {
   const { style, legend } = useMemo(() => {
-    const c = aggregates.contestedSlots;
-    const u = aggregates.unopposedSlots;
-    const v = aggregates.vacantSlots;
-    const t = c + u + v;
+    const c = aggregates.contestedDelegateCount;
+    const u = aggregates.unopposedDelegateCount;
+    const x = aggregates.delegatesExcludedFromCanonicalGrid;
+    const t = c + u + x;
     if (t === 0) {
       return {
         style: { background: 'var(--gray-200)' } as CSSProperties,
         legend: [
-          { label: 'Contested (7-role grid × area)', color: 'var(--contested)', value: 0 },
-          { label: 'Filled single', color: 'var(--unopposed)', value: 0 },
-          { label: 'Vacant', color: 'var(--text-tertiary)', value: 0 },
+          { label: 'Contested delegates', color: 'var(--contested)', value: 0 },
+          { label: 'Unopposed delegates', color: 'var(--unopposed)', value: 0 },
+          { label: 'Off canonical grid', color: 'var(--text-tertiary)', value: 0 },
         ],
       };
     }
@@ -52,17 +52,27 @@ export const ContestDonut = memo(function ContestDonut({ aggregates }: Props) {
     const uDeg = (u / t) * 360;
     const a1 = cDeg;
     const a2 = cDeg + uDeg;
-    const vacantColor = '#94a3b8';
-    const bg = `conic-gradient(var(--contested) 0deg ${a1}deg, var(--unopposed) ${a1}deg ${a2}deg, ${vacantColor} ${a2}deg 360deg)`;
+    const offGridColor = '#94a3b8';
+    const bg =
+      x > 0
+        ? `conic-gradient(var(--contested) 0deg ${a1}deg, var(--unopposed) ${a1}deg ${a2}deg, ${offGridColor} ${a2}deg 360deg)`
+        : `conic-gradient(var(--contested) 0deg ${a1}deg, var(--unopposed) ${a1}deg 360deg)`;
+    const legendItems = [
+      { label: 'Contested delegates (2+ per seat)', color: 'var(--contested)', value: c },
+      { label: 'Unopposed delegates (1 per seat)', color: 'var(--unopposed)', value: u },
+    ];
+    if (x > 0) {
+      legendItems.push({ label: 'Off canonical grid', color: offGridColor, value: x });
+    }
     return {
       style: { background: bg } as CSSProperties,
-      legend: [
-        { label: 'Contested (1 seat, 2+ delegates)', color: 'var(--contested)', value: c },
-        { label: 'Filled (exactly 1)', color: 'var(--unopposed)', value: u },
-        { label: 'Vacant', color: vacantColor, value: v },
-      ],
+      legend: legendItems,
     };
-  }, [aggregates.contestedSlots, aggregates.unopposedSlots, aggregates.vacantSlots]);
+  }, [
+    aggregates.contestedDelegateCount,
+    aggregates.unopposedDelegateCount,
+    aggregates.delegatesExcludedFromCanonicalGrid,
+  ]);
 
   return (
     <div className="chart-donut-wrap">
@@ -79,8 +89,10 @@ export const ContestDonut = memo(function ContestDonut({ aggregates }: Props) {
           </div>
         ))}
         <p style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', maxWidth: '14rem', marginTop: '0.25rem' }}>
-          Whole donut = electoral areas × 7 canonical positions ({aggregates.canonicalLogicalSlots} slots).
-          Each contested seat still counts once.
+          Slices are <strong>people</strong> (Σ {aggregates.contestedDelegateCount + aggregates.unopposedDelegateCount + aggregates.delegatesExcludedFromCanonicalGrid} ={' '}
+          {aggregates.totalDelegates} total). Seats: {aggregates.contestedSlots} contested +{' '}
+          {aggregates.unopposedSlots} filled + {aggregates.vacantSlots} vacant ={' '}
+          {aggregates.canonicalLogicalSlots}.
         </p>
       </div>
     </div>

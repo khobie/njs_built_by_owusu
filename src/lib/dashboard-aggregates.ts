@@ -52,6 +52,10 @@ export interface DashboardAggregates {
   contestedSlots: number;
   /** Canonical pairs with exactly one delegate */
   unopposedSlots: number;
+  /** Delegate rows in contested slots (2+ per seat) — sums with unopposedDelegateCount on grid */
+  contestedDelegateCount: number;
+  /** Delegate rows in single-occupant slots */
+  unopposedDelegateCount: number;
   /** Canonical pairs with zero delegates */
   vacantSlots: number;
   /** Electoral areas included in the current filter scope */
@@ -154,12 +158,16 @@ function computeElectoralAreaSlotRollup(
 ): {
   contestedSlots: number;
   unopposedSlots: number;
+  contestedDelegateCount: number;
+  unopposedDelegateCount: number;
   vacantSlots: number;
   canonicalLogicalSlots: number;
   contestHighlights: ContestHighlightRow[];
 } {
   let contestedSlots = 0;
   let unopposedSlots = 0;
+  let contestedDelegateCount = 0;
+  let unopposedDelegateCount = 0;
   let vacantSlots = 0;
   const contestHighlights: ContestHighlightRow[] = [];
   const canonicalLogicalSlots = electoralAreas.length * CANONICAL_DELEGATE_POSITIONS.length;
@@ -171,6 +179,7 @@ function computeElectoralAreaSlotRollup(
       const n = list?.length ?? 0;
       if (n > 1) {
         contestedSlots += 1;
+        contestedDelegateCount += n;
         const sample = list![0];
         contestHighlights.push({
           electoralAreaName: sample.electoralAreaName ?? area.name,
@@ -180,6 +189,7 @@ function computeElectoralAreaSlotRollup(
         });
       } else if (n === 1) {
         unopposedSlots += 1;
+        unopposedDelegateCount += n;
       } else {
         vacantSlots += 1;
       }
@@ -190,7 +200,15 @@ function computeElectoralAreaSlotRollup(
     (a, b) => b.candidateCount - a.candidateCount || a.electoralAreaCode.localeCompare(b.electoralAreaCode),
   );
 
-  return { contestedSlots, unopposedSlots, vacantSlots, canonicalLogicalSlots, contestHighlights };
+  return {
+    contestedSlots,
+    unopposedSlots,
+    contestedDelegateCount,
+    unopposedDelegateCount,
+    vacantSlots,
+    canonicalLogicalSlots,
+    contestHighlights,
+  };
 }
 
 export function buildElectoralAreaCanonicalSlotReports(
@@ -299,8 +317,15 @@ export function aggregateDashboardCandidates(
   const areaIds = new Set(electoralAreas.map((a) => a.id));
   const { occupancy, delegatesExcludedFromCanonicalGrid } = buildCanonicalOccupancyForElectoralAreas(rows, areaIds);
   const delegatesOnCanonicalSlotGrid = countDelegatesOnGrid(occupancy);
-  const { contestedSlots, unopposedSlots, vacantSlots, canonicalLogicalSlots, contestHighlights } =
-    computeElectoralAreaSlotRollup(electoralAreas, occupancy);
+  const {
+    contestedSlots,
+    unopposedSlots,
+    contestedDelegateCount,
+    unopposedDelegateCount,
+    vacantSlots,
+    canonicalLogicalSlots,
+    contestHighlights,
+  } = computeElectoralAreaSlotRollup(electoralAreas, occupancy);
 
   const areaCounts = new Map<string, number>();
   for (const r of rows) {
@@ -322,6 +347,8 @@ export function aggregateDashboardCandidates(
     verificationRatePct,
     contestedSlots,
     unopposedSlots,
+    contestedDelegateCount,
+    unopposedDelegateCount,
     vacantSlots,
     electoralAreasInScope: electoralAreas.length,
     canonicalLogicalSlots,

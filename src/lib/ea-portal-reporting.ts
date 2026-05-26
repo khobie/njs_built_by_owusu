@@ -182,6 +182,12 @@ export async function buildEaPortalReportPayload(scope: string[] | null, filters
   const contests = contestKeys.size;
   const unopposed = unopposedKeys.size;
   const totalSlots = slotCounts.size;
+  let contestedDelegateCount = 0;
+  let unopposedDelegateCount = 0;
+  for (const count of Array.from(slotCounts.values())) {
+    if (count > 1) contestedDelegateCount += count;
+    else if (count === 1) unopposedDelegateCount += count;
+  }
 
   const decided = verified + rejected;
   const inPipeline = returned + pending;
@@ -242,6 +248,8 @@ export async function buildEaPortalReportPayload(scope: string[] | null, filters
       issued,
       contests,
       unopposed,
+      contestedDelegateCount,
+      unopposedDelegateCount,
       newDelegates,
       oldDelegates,
       verificationRate,
