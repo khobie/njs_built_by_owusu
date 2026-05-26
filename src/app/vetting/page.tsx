@@ -11,6 +11,11 @@ import {
   compareDelegatePositionCsvOrder,
   canonicalizeDelegatePosition,
 } from '@/lib/delegate-positions';
+import {
+  nominationCandidateCardClass,
+  nominationVettingOutcome,
+  nominationVettingOutcomeLabel,
+} from '@/lib/vetting-display';
 
 interface ElectoralArea { id: string; name: string; code: string; }
 /** Optional relation from API; not shown in vetting UI (electoral area + role only). */
@@ -487,6 +492,34 @@ function VettingPageInner() {
     return map[type]?.[value] || 'issued';
   };
 
+  const VettingOutcomeBadge = ({ status }: { status: string }) => {
+    const outcome = nominationVettingOutcome(status);
+    const label = nominationVettingOutcomeLabel(status);
+    if (!outcome || !label) {
+      return (
+        <span className={`badge badge-${getBadgeClass('status', status)}`} style={{ fontSize: '0.7rem' }}>
+          {status}
+        </span>
+      );
+    }
+    return (
+      <span className={`vetting-outcome-badge ${outcome}`}>
+        {outcome === 'approved' ? '✓' : '✗'} {label}
+      </span>
+    );
+  };
+
+  const VettingDecisionBanner = ({ status }: { status: string }) => {
+    const outcome = nominationVettingOutcome(status);
+    const label = nominationVettingOutcomeLabel(status);
+    if (!outcome || !label) return null;
+    return (
+      <div className={`vetting-decision-banner ${outcome}`}>
+        {outcome === 'approved' ? '✓' : '✗'} {label} — vetting decision recorded
+      </div>
+    );
+  };
+
   const rowsForDuplicates = activeTab === 'search' ? quickResults : candidates;
   const isRowError = (candidate: Candidate) =>
     !candidate.electoralAreaId || canonicalizeDelegatePosition(candidate.position) === null;
@@ -761,15 +794,16 @@ function VettingPageInner() {
               {candidates.map((c) => (
                 <div
                   key={c.id}
-                  className={`candidate-card ${isRowError(c) ? 'error' : ''}`}
+                  className={nominationCandidateCardClass(c.status, isRowError(c) ? 'error' : undefined)}
                 >
+                  <VettingDecisionBanner status={c.status} />
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                     <div>
                       <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>{c.formNumber}</div>
                       <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', lineHeight: '1.2' }}>{formatName(c)}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-end' }}>
-                      <span className={`badge badge-${getBadgeClass('status', c.status)}`} style={{ fontSize: '0.7rem' }}>{c.status}</span>
+                      <VettingOutcomeBadge status={c.status} />
                       <span className={`badge badge-${getBadgeClass('contest', c.contestStatus)}`} style={{ fontSize: '0.7rem' }}>
                         {formatContestLabel(c.contestStatus)}
                       </span>
@@ -851,15 +885,16 @@ function VettingPageInner() {
               {quickResults.map((c) => (
                 <div
                   key={c.id}
-                  className={`candidate-card ${isRowError(c) ? 'error' : ''}`}
+                  className={nominationCandidateCardClass(c.status, isRowError(c) ? 'error' : undefined)}
                 >
+                  <VettingDecisionBanner status={c.status} />
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                     <div>
                       <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>{c.formNumber}</div>
                       <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', lineHeight: '1.2' }}>{formatName(c)}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-end' }}>
-                      <span className={`badge badge-${getBadgeClass('status', c.status)}`} style={{ fontSize: '0.7rem' }}>{c.status}</span>
+                      <VettingOutcomeBadge status={c.status} />
                       <span className={`badge badge-${getBadgeClass('contest', c.contestStatus)}`} style={{ fontSize: '0.7rem' }}>
                         {formatContestLabel(c.contestStatus)}
                       </span>
@@ -914,18 +949,21 @@ function VettingPageInner() {
               <button className="modal-close" onClick={closePanel}>&times;</button>
             </div>
             <div className="modal-body" style={{ padding: 0 }}>
+              <div style={{ padding: '1rem 1.5rem 0' }}>
+                <VettingDecisionBanner status={selectedCandidate.status} />
+              </div>
               {/* Status Overview Section */}
               <div style={{ 
-                background: 'linear-gradient(135deg, var(--gray-50), var(--primary-50))',
+                background: nominationVettingOutcome(selectedCandidate.status)
+                  ? 'var(--gray-50)'
+                  : 'linear-gradient(135deg, var(--gray-50), var(--primary-50))',
                 padding: '1.5rem',
                 borderBottom: '1px solid var(--border-light)'
               }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
                   <div>
                     <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Status</div>
-                    <span className={`badge badge-${getBadgeClass('status', selectedCandidate.status)}`} style={{ fontSize: '0.875rem', padding: '0.375rem 0.75rem' }}>
-                      {selectedCandidate.status}
-                    </span>
+                    <VettingOutcomeBadge status={selectedCandidate.status} />
                   </div>
                   <div>
                     <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Verification</div>

@@ -643,6 +643,117 @@ tr.editing-row:hover {
   background: linear-gradient(135deg, var(--danger-50), var(--surface));
 }
 
+/* After vetting decision — muted card with clear outcome */
+.candidate-card.vetting-decided {
+  opacity: 0.88;
+  background: var(--gray-50);
+  border-color: var(--gray-200);
+}
+
+.candidate-card.vetting-decided:hover {
+  transform: none;
+  box-shadow: var(--shadow-sm);
+  border-color: var(--gray-200);
+}
+
+.candidate-card.vetting-decided-approved::before {
+  opacity: 1;
+  height: 4px;
+  background: linear-gradient(90deg, var(--success), #34d399);
+}
+
+.candidate-card.vetting-decided-rejected::before {
+  opacity: 1;
+  height: 4px;
+  background: linear-gradient(90deg, var(--danger), #f87171);
+}
+
+.vetting-decision-banner {
+  margin: -0.25rem 0 0.75rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.vetting-decision-banner.approved {
+  background: var(--success-100);
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+
+.vetting-decision-banner.rejected {
+  background: var(--danger-100);
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.vetting-outcome-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vetting-outcome-badge.approved {
+  background: var(--success-100);
+  color: #047857;
+  border: 1px solid #6ee7b7;
+}
+
+.vetting-outcome-badge.rejected {
+  background: var(--danger-100);
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.ea-portal-table tbody tr.ea-row-vetting-decided {
+  color: var(--text-secondary);
+}
+
+.ea-portal-table tbody tr.ea-row-vetting-decided td {
+  background: var(--gray-50);
+}
+
+.ea-portal-table tbody tr.ea-row-vetting-approved td {
+  box-shadow: inset 3px 0 0 var(--success);
+}
+
+.ea-portal-table tbody tr.ea-row-vetting-rejected td {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.ea-portal-table tbody tr.ea-row-vetting-decided:hover td {
+  background: var(--gray-100);
+}
+
+.ea-vetting-outcome-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.ea-vetting-outcome-pill.approved {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.ea-vetting-outcome-pill.rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .candidate-card .card-header {
   display: flex;
   justify-content: space-between;

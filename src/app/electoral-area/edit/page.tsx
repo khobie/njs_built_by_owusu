@@ -14,6 +14,11 @@ import {
   type EaFormDelegateType,
 } from '@/lib/ea-portal-form-constants';
 import { notifyEaPortalRefresh } from '@/lib/ea-portal-refresh';
+import {
+  eaPortalTableRowClass,
+  eaPortalVettingOutcome,
+  eaPortalVettingOutcomeLabel,
+} from '@/lib/vetting-display';
 
 type AreaOpt = { id: string; name: string; region: string };
 
@@ -285,17 +290,26 @@ export default function ElectoralAreaEditPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id}>
+                {rows.map((r) => {
+                  const outcome = eaPortalVettingOutcome(r.status);
+                  const outcomeLabel = eaPortalVettingOutcomeLabel(r.status);
+                  return (
+                  <tr key={r.id} className={eaPortalTableRowClass(r.status)}>
                     <td style={{ fontFamily: 'ui-monospace, monospace', fontWeight: 600 }}>{r.formNumber}</td>
                     <td>{r.fullName}</td>
                     <td>{r.phone}</td>
                     <td style={{ fontSize: '0.8rem' }}>{r.electoralArea.name}</td>
                     <td style={{ fontSize: '0.72rem' }}>{r.position}</td>
                     <td>
-                      <span className={`ea-status-badge ${eaFormStatusBadgeClass(r.status)}`}>
-                        {eaFormStatusLabel(r.status)}
-                      </span>
+                      {outcome && outcomeLabel ? (
+                        <span className={`ea-vetting-outcome-pill ${outcome}`}>
+                          {outcome === 'approved' ? '✓' : '✗'} {outcomeLabel}
+                        </span>
+                      ) : (
+                        <span className={`ea-status-badge ${eaFormStatusBadgeClass(r.status)}`}>
+                          {eaFormStatusLabel(r.status)}
+                        </span>
+                      )}
                     </td>
                     <td>
                       <button type="button" className="btn btn-primary btn-sm" onClick={() => openEdit(r)}>
@@ -303,7 +317,8 @@ export default function ElectoralAreaEditPage() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -320,11 +335,28 @@ export default function ElectoralAreaEditPage() {
               </button>
             </div>
             <div className="ea-portal-modal-body">
+              {(() => {
+                const outcome = eaPortalVettingOutcome(modal.status);
+                const label = eaPortalVettingOutcomeLabel(modal.status);
+                if (!outcome || !label) return null;
+                return (
+                  <div className={`vetting-decision-banner ${outcome}`} style={{ marginBottom: '1rem' }}>
+                    {outcome === 'approved' ? '✓' : '✗'} {label} — vetting decision recorded
+                  </div>
+                );
+              })()}
               <p style={{ fontSize: '0.85rem', color: 'var(--gray-600)', marginTop: 0 }}>
                 Status:{' '}
-                <span className={`ea-status-badge ${eaFormStatusBadgeClass(modal.status)}`}>
-                  {eaFormStatusLabel(modal.status)}
-                </span>
+                {eaPortalVettingOutcomeLabel(modal.status) ? (
+                  <span className={`ea-vetting-outcome-pill ${eaPortalVettingOutcome(modal.status)}`}>
+                    {eaPortalVettingOutcome(modal.status) === 'approved' ? '✓' : '✗'}{' '}
+                    {eaPortalVettingOutcomeLabel(modal.status)}
+                  </span>
+                ) : (
+                  <span className={`ea-status-badge ${eaFormStatusBadgeClass(modal.status)}`}>
+                    {eaFormStatusLabel(modal.status)}
+                  </span>
+                )}
                 {canChangeStatus ? (
                   <span>
                     {' '}

@@ -5,8 +5,15 @@ import {
   EA_PORTAL_FORM_POSITIONS,
   EA_FORM_STATUSES,
   EA_FORM_DELEGATE_TYPES,
+  eaFormStatusBadgeClass,
+  eaFormStatusLabel,
 } from '@/lib/ea-portal-form-constants';
 import { notifyEaPortalRefresh } from '@/lib/ea-portal-refresh';
+import {
+  eaPortalTableRowClass,
+  eaPortalVettingOutcome,
+  eaPortalVettingOutcomeLabel,
+} from '@/lib/vetting-display';
 
 type AreaOpt = { id: string; name: string; region: string };
 type DelegateRow = {
@@ -212,22 +219,36 @@ export default function EaPortalVettingPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id}>
+                {rows.map((r) => {
+                  const outcome = eaPortalVettingOutcome(r.status);
+                  const outcomeLabel = eaPortalVettingOutcomeLabel(r.status);
+                  return (
+                  <tr key={r.id} className={eaPortalTableRowClass(r.status)}>
                     <td>{r.formNumber}</td>
                     <td>{r.fullName}</td>
                     <td>{r.phone}</td>
                     <td>{r.electoralArea.name}</td>
                     <td>{r.delegateType === 'OLD' ? 'Old' : 'New'}</td>
                     <td style={{ fontSize: '0.75rem' }}>{r.position}</td>
-                    <td>{r.status}</td>
+                    <td>
+                      {outcome && outcomeLabel ? (
+                        <span className={`ea-vetting-outcome-pill ${outcome}`}>
+                          {outcome === 'approved' ? '✓' : '✗'} {outcomeLabel}
+                        </span>
+                      ) : (
+                        <span className={`ea-status-badge ${eaFormStatusBadgeClass(r.status)}`}>
+                          {eaFormStatusLabel(r.status)}
+                        </span>
+                      )}
+                    </td>
                     <td>
                       <button type="button" className="btn btn-secondary btn-sm" onClick={() => openEdit(r)}>
                         Review
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -244,6 +265,16 @@ export default function EaPortalVettingPage() {
               </button>
             </div>
             <div className="ea-portal-modal-body">
+              {(() => {
+                const outcome = eaPortalVettingOutcome(modal.status);
+                const label = eaPortalVettingOutcomeLabel(modal.status);
+                if (!outcome || !label) return null;
+                return (
+                  <div className={`vetting-decision-banner ${outcome}`} style={{ marginBottom: '1rem' }}>
+                    {outcome === 'approved' ? '✓' : '✗'} {label} — vetting decision recorded
+                  </div>
+                );
+              })()}
               <div className="grid-3">
                 <div className="form-group">
                   <label>Surname</label>
