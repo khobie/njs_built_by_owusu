@@ -16,6 +16,10 @@ import {
   nominationVettingOutcome,
   nominationVettingOutcomeLabel,
 } from '@/lib/vetting-display';
+import {
+  NOMINATION_FORM_NOT_RETURNED_MESSAGE,
+  nominationFormReturned,
+} from '@/lib/vetting-eligibility';
 
 interface ElectoralArea { id: string; name: string; code: string; }
 /** Optional relation from API; not shown in vetting UI (electoral area + role only). */
@@ -556,6 +560,10 @@ function VettingPageInner() {
 
   const setVettingResponse = async (questionKey: string, nextResponse: boolean) => {
     if (!selectedCandidate) return;
+    if (!nominationFormReturned(selectedCandidate.status)) {
+      alert(NOMINATION_FORM_NOT_RETURNED_MESSAGE);
+      return;
+    }
     setSavingId(questionKey);
     try {
       const res = await fetch(`/api/candidates/${selectedCandidate.id}/vetting`, {
@@ -951,6 +959,14 @@ function VettingPageInner() {
             <div className="modal-body" style={{ padding: 0 }}>
               <div style={{ padding: '1rem 1.5rem 0' }}>
                 <VettingDecisionBanner status={selectedCandidate.status} />
+                {!nominationFormReturned(selectedCandidate.status) ? (
+                  <div
+                    className="warning-item error"
+                    style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', borderRadius: 'var(--radius)' }}
+                  >
+                    {NOMINATION_FORM_NOT_RETURNED_MESSAGE}
+                  </div>
+                ) : null}
               </div>
               {/* Status Overview Section */}
               <div style={{ 
@@ -1078,7 +1094,10 @@ function VettingPageInner() {
                               <button
                                 className={`btn ${isYes ? 'btn-success' : 'btn-secondary'} btn-sm`}
                                 onClick={() => setVettingResponse(item.key, true)}
-                                disabled={savingId === item.key}
+                                disabled={
+                                  savingId === item.key ||
+                                  !nominationFormReturned(selectedCandidate.status)
+                                }
                                 style={{ padding: '0.375rem 0.875rem' }}
                               >
                                 ✓ Yes
@@ -1086,7 +1105,10 @@ function VettingPageInner() {
                               <button
                                 className={`btn ${isNo ? 'btn-danger' : 'btn-secondary'} btn-sm`}
                                 onClick={() => setVettingResponse(item.key, false)}
-                                disabled={savingId === item.key}
+                                disabled={
+                                  savingId === item.key ||
+                                  !nominationFormReturned(selectedCandidate.status)
+                                }
                                 style={{ padding: '0.375rem 0.875rem' }}
                               >
                                 ✕ No
@@ -1189,12 +1211,15 @@ function VettingPageInner() {
                       disabled={
                         savingId === selectedCandidate.id ||
                         !selectedCandidate.electoralAreaId ||
-                        isRowError(selectedCandidate)
+                        isRowError(selectedCandidate) ||
+                        !nominationFormReturned(selectedCandidate.status)
                       }
                       title={
-                        isRowError(selectedCandidate)
-                          ? 'Fix area and canonical role before verifying'
-                          : undefined
+                        !nominationFormReturned(selectedCandidate.status)
+                          ? NOMINATION_FORM_NOT_RETURNED_MESSAGE
+                          : isRowError(selectedCandidate)
+                            ? 'Fix area and canonical role before verifying'
+                            : undefined
                       }
                     >
                       ✓ Verify Candidate
@@ -1202,10 +1227,34 @@ function VettingPageInner() {
                   )}
                   {selectedCandidate.verificationStatus === 'VERIFIED' && selectedCandidate.status !== 'APPROVED' && selectedCandidate.status !== 'REJECTED' && (
                     <>
-                      <button className="btn btn-success" onClick={() => handleAction(selectedCandidate.id, 'approve')} disabled={savingId === selectedCandidate.id}>
+                      <button
+                        className="btn btn-success"
+                        onClick={() => handleAction(selectedCandidate.id, 'approve')}
+                        disabled={
+                          savingId === selectedCandidate.id ||
+                          !nominationFormReturned(selectedCandidate.status)
+                        }
+                        title={
+                          !nominationFormReturned(selectedCandidate.status)
+                            ? NOMINATION_FORM_NOT_RETURNED_MESSAGE
+                            : undefined
+                        }
+                      >
                         ✓ Approve Candidate
                       </button>
-                      <button className="btn btn-danger" onClick={() => handleAction(selectedCandidate.id, 'reject')} disabled={savingId === selectedCandidate.id}>
+                      <button
+                        className="btn btn-danger"
+                        onClick={() => handleAction(selectedCandidate.id, 'reject')}
+                        disabled={
+                          savingId === selectedCandidate.id ||
+                          !nominationFormReturned(selectedCandidate.status)
+                        }
+                        title={
+                          !nominationFormReturned(selectedCandidate.status)
+                            ? NOMINATION_FORM_NOT_RETURNED_MESSAGE
+                            : undefined
+                        }
+                      >
                         ✕ Reject Candidate
                       </button>
                     </>

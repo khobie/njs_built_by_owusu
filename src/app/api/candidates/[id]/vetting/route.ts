@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { assertNominationCanVet } from '@/lib/vetting-eligibility';
 
 // Standard vetting questions checklist
 const VETTING_QUESTIONS = [
@@ -68,6 +69,11 @@ export async function POST(
         { error: 'Candidate not found' },
         { status: 404 }
       );
+    }
+
+    const returnGate = assertNominationCanVet(candidate.status);
+    if (!returnGate.ok) {
+      return NextResponse.json({ error: returnGate.error }, { status: 400 });
     }
 
     // Upsert the response

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { canVetEaDelegates, formsVisibleWhere, logEaPortalActivity } from '@/lib/ea-portal-access';
 import { requireEaPortal } from '@/lib/ea-portal-session';
+import { assertEaFormCanVet } from '@/lib/vetting-eligibility';
 
 const bodySchema = z.object({
   action: z.enum(['verify', 'reject', 'return', 'pending']),
@@ -27,6 +28,11 @@ export async function POST(
 
   const body = bodySchema.parse(await request.json());
   const notes = body.vettingNotes?.trim() || null;
+
+  const returnGate = assertEaFormCanVet(existing.status, body.action);
+  if (!returnGate.ok) {
+    return NextResponse.json({ error: returnGate.error }, { status: 400 });
+  }
 
   let status = existing.status;
   let verifiedAt: Date | null = existing.verifiedAt;

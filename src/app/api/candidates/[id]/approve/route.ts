@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { recalculateContestStatusForGroup } from '@/lib/contest-status';
 import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
 import { canVet } from '@/lib/roles';
+import { assertNominationCanVet } from '@/lib/vetting-eligibility';
 
 export async function POST(
   request: NextRequest,
@@ -36,6 +37,11 @@ export async function POST(
       if (!areaCode || !allowed.includes(areaCode)) {
         return NextResponse.json({ error: 'Forbidden for this electoral area' }, { status: 403 });
       }
+    }
+
+    const returnGate = assertNominationCanVet(candidate.status);
+    if (!returnGate.ok) {
+      return NextResponse.json({ error: returnGate.error }, { status: 400 });
     }
 
     if (!candidate.electoralAreaId) {

@@ -13,6 +13,7 @@ import {
 import { canIssueEaForms, canVetEaDelegates, formsVisibleWhere, logEaPortalActivity } from '@/lib/ea-portal-access';
 import { findDuplicateDelegate } from '@/lib/ea-portal-delegate';
 import { assertAreaIdAllowed, requireEaPortal } from '@/lib/ea-portal-session';
+import { assertEaPatchStatusAllowed } from '@/lib/vetting-eligibility';
 
 const formNumberSchema = z
   .string()
@@ -99,6 +100,13 @@ export async function PATCH(
     }
     if (!nextFull) {
       return NextResponse.json({ error: 'Name fields are required.' }, { status: 400 });
+    }
+
+    if (body.status !== undefined) {
+      const statusGate = assertEaPatchStatusAllowed(existing.status, body.status);
+      if (!statusGate.ok) {
+        return NextResponse.json({ error: statusGate.error }, { status: 400 });
+      }
     }
 
     if (body.voterId !== undefined) {

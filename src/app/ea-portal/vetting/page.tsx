@@ -14,6 +14,7 @@ import {
   eaPortalVettingOutcome,
   eaPortalVettingOutcomeLabel,
 } from '@/lib/vetting-display';
+import { EA_FORM_NOT_RETURNED_MESSAGE, eaFormReturned } from '@/lib/vetting-eligibility';
 
 type AreaOpt = { id: string; name: string; region: string };
 type DelegateRow = {
@@ -275,6 +276,11 @@ export default function EaPortalVettingPage() {
                   </div>
                 );
               })()}
+              {!eaFormReturned(modal.status) ? (
+                <div className="warning-item error" style={{ marginBottom: '1rem', padding: '0.75rem 1rem' }}>
+                  {EA_FORM_NOT_RETURNED_MESSAGE}
+                </div>
+              ) : null}
               <div className="grid-3">
                 <div className="form-group">
                   <label>Surname</label>
@@ -342,13 +348,31 @@ export default function EaPortalVettingPage() {
                 <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void vetAction('return')}>
                   Returned
                 </button>
-                <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void vetAction('pending')}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy || !eaFormReturned(modal.status)}
+                  title={!eaFormReturned(modal.status) ? EA_FORM_NOT_RETURNED_MESSAGE : undefined}
+                  onClick={() => void vetAction('pending')}
+                >
                   Pending vetting
                 </button>
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void vetAction('verify')}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={busy || !eaFormReturned(modal.status)}
+                  title={!eaFormReturned(modal.status) ? EA_FORM_NOT_RETURNED_MESSAGE : undefined}
+                  onClick={() => void vetAction('verify')}
+                >
                   Verify
                 </button>
-                <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void vetAction('reject')}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy || !eaFormReturned(modal.status)}
+                  title={!eaFormReturned(modal.status) ? EA_FORM_NOT_RETURNED_MESSAGE : undefined}
+                  onClick={() => void vetAction('reject')}
+                >
                   Reject
                 </button>
               </div>

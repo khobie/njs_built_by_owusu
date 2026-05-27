@@ -144,7 +144,8 @@ export default function EaPortalReportsPage() {
   const [loadErr, setLoadErr] = useState('');
   const [tab, setTab] = useState<ReportTab>('overview');
 
-  const [fltArea, setFltArea] = useState('');
+  const [fltAreas, setFltAreas] = useState<string[]>([]);
+  const [areaPickerOpen, setAreaPickerOpen] = useState(false);
   const [fltPosition, setFltPosition] = useState('');
   const [fltType, setFltType] = useState('');
   const [fltStatus, setFltStatus] = useState('');
@@ -158,7 +159,7 @@ export default function EaPortalReportsPage() {
 
   const queryString = useMemo(() => {
     const p = new URLSearchParams();
-    if (fltArea) p.set('electoralAreaId', fltArea);
+    for (const id of fltAreas) p.append('electoralAreaId', id);
     if (fltPosition) p.set('position', fltPosition);
     if (fltType) p.set('delegateType', fltType);
     if (fltStatus) p.set('status', fltStatus);
@@ -168,13 +169,35 @@ export default function EaPortalReportsPage() {
     if (fltContest) p.set('contestOnly', '1');
     if (fltUnopposed) p.set('unopposedOnly', '1');
     return p.toString();
-  }, [fltArea, fltPosition, fltType, fltStatus, fltFrom, fltTo, debouncedQ, fltContest, fltUnopposed]);
+  }, [fltAreas, fltPosition, fltType, fltStatus, fltFrom, fltTo, debouncedQ, fltContest, fltUnopposed]);
+
+  const areaTotals = useMemo(() => {
+    if (!data?.byArea.length) return null;
+    return data.byArea.reduce(
+      (acc, a) => ({
+        total: acc.total + a.total,
+        issued: acc.issued + a.issued,
+        returned: acc.returned + a.returned,
+        verified: acc.verified + a.verified,
+        rejected: acc.rejected + a.rejected,
+        pending: acc.pending + a.pending,
+        contests: acc.contests + a.contests,
+      }),
+      { total: 0, issued: 0, returned: 0, verified: 0, rejected: 0, pending: 0, contests: 0 }
+    );
+  }, [data?.byArea]);
+
+  const toggleArea = (id: string) => {
+    setFltAreas((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   const activeChips = useMemo(() => {
     const chips: string[] = [];
-    if (fltArea) {
-      const a = areas.find((x) => x.id === fltArea);
-      chips.push(a ? `Area: ${a.name}` : 'Area filter');
+    if (fltAreas.length === 1) {
+      const a = areas.find((x) => x.id === fltAreas[0]);
+      chips.push(a ? `Area: ${a.name}` : '1 area');
+    } else if (fltAreas.length > 1) {
+      chips.push(`${fltAreas.length} electoral areas`);
     }
     if (fltPosition) chips.push(`Position: ${fltPosition}`);
     if (fltType) chips.push(eaDelegateTypeLabel(fltType));
@@ -185,7 +208,7 @@ export default function EaPortalReportsPage() {
     if (fltContest) chips.push('Contests only');
     if (fltUnopposed) chips.push('Unopposed only');
     return chips;
-  }, [fltArea, fltPosition, fltType, fltStatus, fltFrom, fltTo, debouncedQ, fltContest, fltUnopposed, areas]);
+  }, [fltAreas, fltPosition, fltType, fltStatus, fltFrom, fltTo, debouncedQ, fltContest, fltUnopposed, areas]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -227,7 +250,8 @@ export default function EaPortalReportsPage() {
   }, [load]);
 
   const clearFilters = () => {
-    setFltArea('');
+    setFltAreas([]);
+    setAreaPickerOpen(false);
     setFltPosition('');
     setFltType('');
     setFltStatus('');
@@ -296,16 +320,65 @@ export default function EaPortalReportsPage() {
           </button>
         </div>
         <div className="ea-portal-filters">
-          <div className="form-group" style={{ minWidth: '150px' }}>
-            <label>Electoral area</label>
-            <select className="select" value={fltArea} onChange={(e) => setFltArea(e.target.value)}>
-              <option value="">All areas</option>
-              {areas.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+          <div className="form-group ea-reports-area-filter" style={{ minWidth: '200px', flex: '1 1 220px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+              <label>Electoral areas</label>
+              {fltAreas.length > 0 ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ padding: '0.15rem 0.45rem', fontSize: '0.7rem' }}
+                  onClick={() => setFltAreas([])}
+                >
+                  Clear ({fltAreas.length})
+                </button>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="select ea-reports-area-trigger"
+              onClick={() => setAreaPickerOpen((o) => !o)}
+              aria-expanded={areaPickerOpen}
+            >
+              {fltAreas.length === 0
+                ? 'All areas'
+                : fltAreas.length === 1
+                  ? areas.find((a) => a.id === fltAreas[0])?.name ?? '1 area'
+                  : `${fltAreas.length} areas selected`}
+            </button>
+            {areaPickerOpen ? (
+              <div className="ea-reports-area-panel">
+                <div className="ea-reports-area-panel-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setFltAreas(areas.map((a) => a.id))}
+                  >
+                    Select all
+                  </button>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFltAreas([])}>
+                    None
+                  </button>
+                </div>
+                <div className="ea-reports-area-checklist">
+                  {areas.map((a) => (
+                    <label key={a.id} className="ea-check-label ea-reports-area-option">
+                      <input
+                        type="checkbox"
+                        checked={fltAreas.includes(a.id)}
+                        onChange={() => toggleArea(a.id)}
+                      />
+                      <span>
+                        {a.name}
+                        <span style={{ color: '#64748b', marginLeft: '0.35rem', fontSize: '0.75rem' }}>
+                          {a.region}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
           <div className="form-group" style={{ minWidth: '130px' }}>
             <label>Position</label>
@@ -556,6 +629,28 @@ export default function EaPortalReportsPage() {
                       ))
                     )}
                   </tbody>
+                  {areaTotals ? (
+                    <tfoot>
+                      <tr className="ea-reports-total-row">
+                        <td colSpan={2} style={{ fontWeight: 700 }}>
+                          Total
+                        </td>
+                        <td>{areaTotals.total}</td>
+                        <td>{areaTotals.issued}</td>
+                        <td>{areaTotals.returned}</td>
+                        <td>{areaTotals.verified}</td>
+                        <td>{areaTotals.rejected}</td>
+                        <td>{areaTotals.pending}</td>
+                        <td>
+                          {areaTotals.contests > 0 ? (
+                            <span className="ea-reports-contest-badge">{areaTotals.contests}</span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  ) : null}
                 </table>
               </div>
             </div>
@@ -657,7 +752,9 @@ export default function EaPortalReportsPage() {
             <div>
               <strong style={{ fontSize: '0.9rem' }}>Export filtered data</strong>
               <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                CSV, Excel, or print — uses active filters above
+                CSV, Excel, or print — <strong>{data.filteredCount}</strong> row
+                {data.filteredCount === 1 ? '' : 's'} match current filters
+                {fltAreas.length > 0 ? ` · ${fltAreas.length} area${fltAreas.length === 1 ? '' : 's'}` : ''}
               </p>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>

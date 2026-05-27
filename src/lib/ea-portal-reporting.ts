@@ -4,7 +4,9 @@ import { compareDelegatePositionCsvOrder } from '@/lib/delegate-positions';
 import { eaFormStatusLabel } from '@/lib/ea-portal-form-constants';
 
 export type EaReportFilters = {
+  /** @deprecated Prefer electoralAreaIds */
   electoralAreaId?: string;
+  electoralAreaIds?: string[];
   position?: string;
   delegateType?: string;
   status?: string;
@@ -14,6 +16,39 @@ export type EaReportFilters = {
   contestOnly?: boolean;
   unopposedOnly?: boolean;
 };
+
+export function parseElectoralAreaIdsFromSearchParams(
+  sp: URLSearchParams
+): string[] | undefined {
+  const fromRepeated = sp.getAll('electoralAreaId').map((id) => id.trim()).filter(Boolean);
+  if (fromRepeated.length > 0) return fromRepeated;
+  const csv = sp.get('electoralAreaIds');
+  if (csv) {
+    const ids = csv
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    if (ids.length > 0) return ids;
+  }
+  const single = sp.get('electoralAreaId')?.trim();
+  return single ? [single] : undefined;
+}
+
+export function parseEaReportFiltersFromSearchParams(sp: URLSearchParams): EaReportFilters {
+  const electoralAreaIds = parseElectoralAreaIdsFromSearchParams(sp);
+  return {
+    electoralAreaIds,
+    electoralAreaId: electoralAreaIds?.length === 1 ? electoralAreaIds[0] : undefined,
+    position: sp.get('position') || undefined,
+    delegateType: sp.get('delegateType') || undefined,
+    status: sp.get('status') || undefined,
+    from: sp.get('from') || undefined,
+    to: sp.get('to') || undefined,
+    q: sp.get('q') || undefined,
+    contestOnly: sp.get('contestOnly') === '1' || sp.get('contestsOnly') === '1',
+    unopposedOnly: sp.get('unopposedOnly') === '1',
+  };
+}
 
 export function buildFormsReportWhere(
   scope: string[] | null,
@@ -28,7 +63,10 @@ export function buildFormsReportWhere(
     parts.push({ electoralAreaId: { in: scope } });
   }
 
-  if (filters.electoralAreaId) parts.push({ electoralAreaId: filters.electoralAreaId });
+  const areaIds =
+    filters.electoralAreaIds?.filter(Boolean) ??
+    (filters.electoralAreaId ? [filters.electoralAreaId] : undefined);
+  if (areaIds?.length) parts.push({ electoralAreaId: { in: areaIds } });
   if (filters.position) parts.push({ position: filters.position });
   if (filters.delegateType === 'NEW' || filters.delegateType === 'OLD') {
     parts.push({ delegateType: filters.delegateType });

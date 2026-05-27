@@ -7,6 +7,7 @@ import { canVet } from '@/lib/roles';
 import { CANONICAL_DELEGATE_POSITIONS } from '@/lib/delegate-positions';
 import { FORM_NUMBER_MAX_LENGTH } from '@/lib/form-number';
 import { nominationSlotWhere } from '@/lib/nomination-slot';
+import { assertNominationPatchVettingAllowed } from '@/lib/vetting-eligibility';
 
 function normalizeGhanaPhone(raw: string): string {
   const digits = raw.replace(/[^\d]/g, '');
@@ -169,6 +170,14 @@ export async function PATCH(
     }
     if (body.status !== undefined) updateData.status = body.status;
     if (body.verificationStatus !== undefined) updateData.verificationStatus = body.verificationStatus;
+
+    const vetPatchGate = assertNominationPatchVettingAllowed(existing.status, {
+      status: body.status,
+      verificationStatus: body.verificationStatus,
+    });
+    if (!vetPatchGate.ok) {
+      return NextResponse.json({ error: vetPatchGate.error }, { status: 400 });
+    }
 
     const nextAreaId =
       typeof updateData.electoralAreaId === 'string' ? updateData.electoralAreaId : existing.electoralAreaId;

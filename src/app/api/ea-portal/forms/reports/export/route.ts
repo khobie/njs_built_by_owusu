@@ -1,8 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { areaFilterForScope } from '@/lib/ea-portal-access';
-import { buildFormsReportWhere } from '@/lib/ea-portal-reporting';
+import {
+  buildFormsReportWhere,
+  parseEaReportFiltersFromSearchParams,
+} from '@/lib/ea-portal-reporting';
 import { requireEaPortal } from '@/lib/ea-portal-session';
+
+function areaSummaryFromForms(
+  forms: {
+    electoralAreaId: string;
+    electoralArea: { name: string; region: string };
+  }[]
+) {
+  const map = new Map<string, { areaName: string; region: string; count: number }>();
+  for (const f of forms) {
+    const id = f.electoralAreaId;
+    const existing = map.get(id);
+    if (existing) existing.count++;
+    else {
+      map.set(id, {
+        areaName: f.electoralArea.name,
+        region: f.electoralArea.region,
+        count: 1,
+      });
+    }
+  }
+  return Array.from(map.values()).sort(
+    (a, b) => b.count - a.count || a.areaName.localeCompare(b.areaName)
+  );
+}
 
 function csvEscape(value: string) {
   return `"${String(value).replace(/"/g, '""')}"`;
@@ -22,22 +49,13 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const format = (searchParams.get('format') || 'csv').toLowerCase();
-  const contestsOnly = searchParams.get('contestsOnly') === '1';
-  const unopposedOnly = searchParams.get('unopposedOnly') === '1';
+  const filters = parseEaReportFiltersFromSearchParams(searchParams);
+  const contestsOnly = filters.contestOnly === true;
+  const unopposedOnly = filters.unopposedOnly === true;
   const view = (searchParams.get('view') || 'detail').toLowerCase();
 
   const areaWhere = areaFilterForScope(gate.scope);
-  const formsWhere = buildFormsReportWhere(gate.scope, {
-    electoralAreaId: searchParams.get('electoralAreaId') || undefined,
-    position: searchParams.get('position') || undefined,
-    delegateType: searchParams.get('delegateType') || undefined,
-    status: searchParams.get('status') || undefined,
-    from: searchParams.get('from') || undefined,
-    to: searchParams.get('to') || undefined,
-    q: searchParams.get('q') || undefined,
-    contestOnly: contestsOnly,
-    unopposedOnly,
-  });
+  const formsWhere = buildFormsReportWhere(gate.scope, filters);
 
   const areas = await prisma.eaPortalArea.findMany({
     where: areaWhere,
@@ -76,12 +94,15 @@ export async function GET(request: NextRequest) {
       : forms;
 
   const stamp = new Date().toISOString().slice(0, 10);
+  const areaSummary = areaSummaryFromForms(filtered);
+  const totalForms = filtered.length;
 
   if (view === 'summary') {
-    const summaryRows = areas.map(
+    const summaryRows = areaSummary.map(
       (a) =>
-        `<tr><td>${escapeHtml(a.name)}</td><td>${escapeHtml(a.region)}</td><td>${a._count.issuedForms}</td></tr>`
+        `<tr><td>${escapeHtml(a.areaName)}</td><td>${escapeHtml(a.region)}</td><td>${a.count}</td></tr>`
     );
+    const summaryTotalRow = `<tr style="font-weight:700;background:#f1f5f9"><td colspan="2">Total</td><td>${totalForms}</td></tr>`;
     const contestRows = Array.from(contestedKeys)
       .map((k) => {
         const [areaId, position] = k.split('\t');
@@ -94,7 +115,7 @@ export async function GET(request: NextRequest) {
     if (format === 'xls' || format === 'excel') {
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>
         <h2>EA Form issuing — Summary (${escapeHtml(stamp)})</h2>
-        <table border="1"><thead><tr><th>Area</th><th>Region</th><th>Forms issued</th></tr></thead><tbody>${summaryRows.join('')}</tbody></table>
+        <table border="1"><thead><tr><th>Area</th><th>Region</th><th>Forms (filtered)</th></tr></thead><tbody>${summaryRows.join('')}${summaryTotalRow}</tbody></table>
         <h2>Contested positions (same area + position, &gt;1 applicant)</h2>
         <table border="1"><thead><tr><th>Area</th><th>Position</th><th>Applicants</th></tr></thead><tbody>${contestRows}</tbody></table>
       </body></html>`;
@@ -118,7 +139,7 @@ export async function GET(request: NextRequest) {
         <button class="no-print" type="button" onclick="window.print()">Print / Save as PDF</button>
         <h1>EA Form issuing — Summary — ${escapeHtml(stamp)}</h1>
         <h2>Forms per area</h2>
-        <table><thead><tr><th>Area</th><th>Region</th><th>Forms</th></tr></thead><tbody>${summaryRows.join('')}</tbody></table>
+        <table><thead><tr><th>Area</th><th>Region</th><th>Forms (filtered)</th></tr></thead><tbody>${summaryRows.join('')}${summaryTotalRow}</tbody></table>
         <h2>Contested positions</h2>
         <table><thead><tr><th>Area</th><th>Position</th><th>Applicants</th></tr></thead><tbody>${contestRows}</tbody></table>
       </body></html>`;
@@ -127,11 +148,14 @@ export async function GET(request: NextRequest) {
 
     const lines: string[] = [];
     lines.push(['section', 'areaName', 'region', 'formCount'].map(csvEscape).join(','));
-    for (const a of areas) {
+    for (const a of areaSummary) {
       lines.push(
-        ['summary_area', a.name, a.region, String(a._count.issuedForms)].map((v) => csvEscape(String(v))).join(',')
+        ['summary_area', a.areaName, a.region, String(a.count)].map((v) => csvEscape(String(v))).join(',')
       );
     }
+    lines.push(
+      ['summary_total', 'TOTAL', '', String(totalForms)].map((v) => csvEscape(String(v))).join(',')
+    );
     lines.push('');
     lines.push(['section', 'areaName', 'position', 'applicantCount'].map(csvEscape).join(','));
     for (const k of Array.from(contestedKeys)) {
@@ -157,16 +181,19 @@ export async function GET(request: NextRequest) {
       `<tr><td>${escapeHtml(f.formNumber)}</td><td>${escapeHtml(f.fullName)}</td><td>${escapeHtml(f.phone)}</td><td>${escapeHtml(f.voterId ?? '')}</td><td>${escapeHtml(f.electoralArea.name)}</td><td>${escapeHtml(f.position)}</td><td>${escapeHtml(f.status)}</td><td>${escapeHtml(f.delegateType)}</td><td>${f.issuedAt.toISOString()}</td><td>${escapeHtml(f.issuedBy.name)}</td></tr>`
   );
 
+  const detailTotalRow = `<tr style="font-weight:700;background:#f1f5f9"><td colspan="9">Total rows</td><td>${totalForms}</td></tr>`;
+
   if (format === 'xls' || format === 'excel') {
-    const summaryRows = areas.map(
+    const summaryRows = areaSummary.map(
       (a) =>
-        `<tr><td>${escapeHtml(a.name)}</td><td>${escapeHtml(a.region)}</td><td>${a._count.issuedForms}</td></tr>`
+        `<tr><td>${escapeHtml(a.areaName)}</td><td>${escapeHtml(a.region)}</td><td>${a.count}</td></tr>`
     );
+    const summaryTotalRow = `<tr style="font-weight:700;background:#f1f5f9"><td colspan="2">Total</td><td>${totalForms}</td></tr>`;
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>
-      <h2>EA Form issuing — Forms per area</h2>
-      <table border="1"><thead><tr><th>Area</th><th>Region</th><th>Forms</th></tr></thead><tbody>${summaryRows.join('')}</tbody></table>
-      <h2>Forms ${contestsOnly ? '(contests only)' : ''}</h2>
-      <table border="1"><thead><tr><th>Form #</th><th>Name</th><th>Phone</th><th>Voter ID</th><th>Area</th><th>Position</th><th>Status</th><th>Delegate</th><th>Issued</th><th>Issued by</th></tr></thead><tbody>${detailRows.join('')}</tbody></table>
+      <h2>EA Form issuing — Forms per area (filtered)</h2>
+      <table border="1"><thead><tr><th>Area</th><th>Region</th><th>Forms</th></tr></thead><tbody>${summaryRows.join('')}${summaryTotalRow}</tbody></table>
+      <h2>Forms ${contestsOnly ? '(contests only)' : ''} — ${totalForms} total</h2>
+      <table border="1"><thead><tr><th>Form #</th><th>Name</th><th>Phone</th><th>Voter ID</th><th>Area</th><th>Position</th><th>Status</th><th>Delegate</th><th>Issued</th><th>Issued by</th></tr></thead><tbody>${detailRows.join('')}${detailTotalRow}</tbody></table>
     </body></html>`;
     return new NextResponse(html, {
       headers: {
@@ -188,17 +215,18 @@ export async function GET(request: NextRequest) {
         @media print { .no-print { display: none; } }
       </style></head><body>
       <button class="no-print" type="button" onclick="window.print()">Print / Save as PDF</button>
-      <h1>EA Form issuing ${contestsOnly ? '— contests only ' : ''}— ${escapeHtml(stamp)}</h1>
-      <table><thead><tr><th>Form #</th><th>Name</th><th>Phone</th><th>Voter ID</th><th>Area</th><th>Position</th><th>Status</th><th>Delegate</th><th>Issued</th><th>By</th></tr></thead><tbody>${detailRows.join('')}</tbody></table>
+      <h1>EA Form issuing ${contestsOnly ? '— contests only ' : ''}— ${escapeHtml(stamp)} (${totalForms} rows)</h1>
+      <table><thead><tr><th>Form #</th><th>Name</th><th>Phone</th><th>Voter ID</th><th>Area</th><th>Position</th><th>Status</th><th>Delegate</th><th>Issued</th><th>By</th></tr></thead><tbody>${detailRows.join('')}${detailTotalRow}</tbody></table>
     </body></html>`;
     return new NextResponse(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
 
   const lines: string[] = [];
   lines.push(['areaName', 'region', 'formCount'].map(csvEscape).join(','));
-  for (const a of areas) {
-    lines.push([a.name, a.region, String(a._count.issuedForms)].map((v) => csvEscape(String(v))).join(','));
+  for (const a of areaSummary) {
+    lines.push([a.areaName, a.region, String(a.count)].map((v) => csvEscape(String(v))).join(','));
   }
+  lines.push(['TOTAL', '', String(totalForms)].map((v) => csvEscape(String(v))).join(','));
   lines.push('');
   lines.push(
     [
@@ -246,6 +274,11 @@ export async function GET(request: NextRequest) {
         .join(',')
     );
   }
+  lines.push(
+    ['TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', String(totalForms), '']
+      .map((v) => csvEscape(String(v)))
+      .join(',')
+  );
   const body = `\uFEFF${lines.join('\n')}`;
   return new NextResponse(body, {
     headers: {

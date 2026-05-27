@@ -2446,6 +2446,60 @@ tr.editing-row:hover {
   font-size: 0.9rem;
 }
 
+.ea-reports-area-filter {
+  position: relative;
+}
+
+.ea-reports-area-trigger {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ea-reports-area-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  min-width: 16rem;
+  max-height: 14rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+}
+
+.ea-reports-area-panel-actions {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.ea-reports-area-checklist {
+  overflow-y: auto;
+  padding: 0.35rem 0.5rem 0.5rem;
+}
+
+.ea-reports-area-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.35rem 0.25rem;
+  font-size: 0.82rem;
+}
+
+.ea-reports-total-row td {
+  font-weight: 700;
+  background: #f1f5f9;
+  border-top: 2px solid #cbd5e1;
+}
+
 .ea-activity-list {
   list-style: none;
   margin: 0;
