@@ -2711,6 +2711,244 @@ tr.editing-row:hover {
   border-radius: var(--radius);
 }
 
+/* ── Notice of Poll portal ─────────────────────────────────────────────── */
+.nop-page {
+  padding-bottom: 3rem;
+}
+
+.nop-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.nop-header h1 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.nop-header p {
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  max-width: 46rem;
+}
+
+.nop-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.nop-toast {
+  background: var(--success, #16a34a);
+  color: #fff;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius, 10px);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.nop-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.nop-card {
+  border: 1px solid var(--border, #e2e8f0);
+  border-left: 4px solid var(--nop-accent, #3b82f6);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.nop-card-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary, #94a3b8);
+  font-weight: 600;
+}
+
+.nop-card-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.nop-filters {
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  padding: 1rem;
+  background: var(--gray-50, #f8fafc);
+  margin-bottom: 1.25rem;
+}
+
+.nop-filter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.nop-filter-head h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.nop-filter-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.nop-filter-grid .form-group {
+  min-width: 150px;
+  margin: 0;
+}
+
+.nop-area-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.85rem;
+}
+
+.nop-area-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: #fff;
+  cursor: pointer;
+}
+
+.nop-area-chip.active {
+  border-color: var(--primary, #2563eb);
+  background: var(--primary-50, #eff6ff);
+  color: var(--primary-600, #1d4ed8);
+}
+
+.nop-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.85rem;
+}
+
+.nop-export-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.nop-export-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.nop-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.nop-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.nop-table th,
+.nop-table td {
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-light, #f1f5f9);
+  vertical-align: top;
+}
+
+.nop-table th {
+  background: var(--gray-50, #f8fafc);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #475569);
+}
+
+.nop-reason {
+  max-width: 16rem;
+  color: var(--danger, #dc2626);
+}
+
+.nop-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-tertiary, #94a3b8);
+}
+
+.nop-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.nop-approved { background: #dcfce7; color: #15803d; }
+.nop-rejected { background: #fee2e2; color: #b91c1c; }
+.nop-contested { background: #ffedd5; color: #c2410c; }
+.nop-unopposed { background: #e0e7ff; color: #4338ca; }
+.nop-muted { background: #f1f5f9; color: #64748b; }
+
+.only-print { display: none; }
+
+@media print {
+  .app-sidebar,
+  .app-topbar,
+  .no-print {
+    display: none !important;
+  }
+  .app-shell,
+  .app-main,
+  .container {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+  .only-print { display: block; }
+  .nop-print-title { text-align: center; margin-bottom: 1rem; }
+  .nop-card { break-inside: avoid; }
+  .nop-table { font-size: 0.7rem; }
+  .nop-table th { background: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .nop-badge { border: 1px solid #cbd5e1; background: #fff !important; color: #0f172a !important; }
+}
+
 /* Tailwind — scoped to .ea-portal-app via tailwind.config important */
 @tailwind base;
 @tailwind components;
