@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionAreaCodes, getSessionUser } from '@/lib/auth';
-import { canVet, hasSystemWideAccess } from '@/lib/roles';
+import { requireEaPortal } from '@/lib/ea-portal-session';
+import { eaFormStatusLabel } from '@/lib/ea-portal-form-constants';
 import {
+  approvalLabel,
   buildNoticeOfPollData,
   finalEligibilityLabel,
   parseNoticeOfPollFilters,
@@ -32,17 +33,13 @@ const HEADERS = [
   'Final Eligibility',
 ];
 
-function vettingLabel(v: string) {
-  return v === 'VERIFIED' ? 'Vetted' : 'Not vetted';
-}
-
 function rowValues(r: NoticeOfPollRow): string[] {
   return [
     r.electoralAreaName,
-    r.positionCanonical ?? r.position,
+    r.position,
     r.applicantName,
-    vettingLabel(r.vettingStatus),
-    r.approvalStatus,
+    eaFormStatusLabel(r.status),
+    approvalLabel(r.status),
     rowContestStatusLabel(r.contestStatus),
     r.disqualificationReason ?? '',
     finalEligibilityLabel(r.finalEligibility),
@@ -50,16 +47,12 @@ function rowValues(r: NoticeOfPollRow): string[] {
 }
 
 export async function GET(request: NextRequest) {
-  const user = await getSessionUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!canVet(user.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const gate = await requireEaPortal(request);
+  if (!gate.ok) return gate.response;
 
   const { searchParams } = new URL(request.url);
   const format = (searchParams.get('format') || 'csv').toLowerCase();
-  const scope = hasSystemWideAccess(user.role) ? null : await getSessionAreaCodes(user.id);
-  const data = await buildNoticeOfPollData(scope, parseNoticeOfPollFilters(searchParams));
+  const data = await buildNoticeOfPollData(gate.scope, parseNoticeOfPollFilters(searchParams));
   const stamp = new Date().toISOString().slice(0, 10);
 
   const s = data.summary;
@@ -111,7 +104,7 @@ export async function GET(request: NextRequest) {
       </style></head><body>
       <button class="no-print" type="button" onclick="window.print()">Print / Save as PDF</button>
       <h1>NOTICE OF POLL</h1>
-      <p class="sub">New Juaben South · Generated ${escapeHtml(stamp)}</p>
+      <p class="sub">Electoral Area Portal · Generated ${escapeHtml(stamp)}</p>
       ${summaryHtml}
       <table><thead><tr>${headHtml}</tr></thead><tbody>${tableRows}</tbody></table>
     </body></html>`;

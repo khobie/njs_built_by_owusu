@@ -1,17 +1,14 @@
 /**
- * Notice of Poll — server-side data builder for the official poll-notice portal.
+ * Notice of Poll — server-side data builder.
  *
- * Built on the polling-station `Candidate` model. Contest status is determined
- * ONLY from APPROVED applicants per electoral area × canonical position, per the
- * electoral rules: rejected / disqualified / absent / not-approved applicants are
- * never counted when deciding contested vs unopposed.
+ * Operates on EA Portal forms (`EaPortalIssuedForm`) ONLY. Contest status is
+ * determined exclusively from VERIFIED (approved) applicants per electoral area
+ * × position: rejected / pending / absent applicants are never counted when
+ * deciding contested vs unopposed.
  */
 import { prisma } from '@/lib/prisma';
-import {
-  canonicalizeDelegatePosition,
-  compareDelegatePositionCsvOrder,
-  normalizeDelegatePosition,
-} from '@/lib/delegate-positions';
+import { formsVisibleWhere } from '@/lib/ea-portal-access';
+import { normalizeEaFormStatus } from '@/lib/ea-portal-delegate';
 import {
   deriveFinalEligibility,
   type NoticeOfPollFilters,
@@ -23,6 +20,7 @@ import {
 
 export {
   NON_ATTENDEE_REASON,
+  approvalLabel,
   finalEligibilityLabel,
   rowContestStatusLabel,
 } from '@/lib/notice-of-poll-display';
@@ -35,141 +33,120 @@ export type {
   FinalEligibility,
 } from '@/lib/notice-of-poll-display';
 
-/** Statuses that represent a completed vetting decision. */
-const DECIDED_STATUSES = new Set(['APPROVED', 'REJECTED']);
+function normalizePosition(raw: string): string {
+  return raw.trim().replace(/\s+/g, ' ').toUpperCase();
+}
 
 function slotKey(electoralAreaId: string, position: string): string {
-  const canon = canonicalizeDelegatePosition(position) ?? normalizeDelegatePosition(position);
-  return `${electoralAreaId}::${canon}`;
+  return `${electoralAreaId}::${normalizePosition(position)}`;
 }
 
-type CandidateForNotice = {
+type FormForNotice = {
   id: string;
   formNumber: string;
-  surname: string;
-  firstName: string;
-  middleName: string | null;
-  phoneNumber: string;
+  fullName: string;
+  phone: string;
   position: string;
   status: string;
-  verificationStatus: string;
   comment: string | null;
+  vettingNotes: string | null;
   electoralAreaId: string;
-  electoralArea: { name: string; code: string } | null;
+  electoralArea: { name: string; region: string } | null;
 };
 
-function buildName(c: CandidateForNotice): string {
-  return [c.surname, c.firstName, c.middleName].filter(Boolean).join(' ').trim() || c.formNumber;
-}
-
 /**
- * Builds the Notice of Poll payload.
+ * Builds the Notice of Poll payload from EA Portal forms.
  *
- * @param areaCodeScope `null` = full access (all areas); array = restrict to those area codes.
+ * @param scope `null` = all areas; string[] = restrict to those EaPortalArea ids.
  * @param filters row-level filters (do not affect contest grouping for area/position scope).
  */
 export async function buildNoticeOfPollData(
-  areaCodeScope: string[] | null,
+  scope: string[] | null,
   filters: NoticeOfPollFilters
 ): Promise<NoticeOfPollPayload> {
-  // Base scope: area access + area/position filters. Contest grouping uses this base
-  // so it stays correct regardless of status / approved-only / search filters.
   const baseAnd: Record<string, unknown>[] = [];
 
-  if (areaCodeScope !== null) {
-    baseAnd.push({
-      electoralArea: { code: { in: areaCodeScope.length ? areaCodeScope : ['__none__'] } },
-    });
-  }
-  if (filters.areaIds?.length) {
-    baseAnd.push({ electoralAreaId: { in: filters.areaIds } });
-  }
-  if (filters.position) {
-    baseAnd.push({ position: filters.position });
-  }
+  const visible = formsVisibleWhere(scope);
+  if (Object.keys(visible).length > 0) baseAnd.push(visible as Record<string, unknown>);
+  if (filters.areaIds?.length) baseAnd.push({ electoralAreaId: { in: filters.areaIds } });
+  if (filters.position) baseAnd.push({ position: filters.position });
 
-  const base = (await prisma.candidate.findMany({
+  const base = (await prisma.eaPortalIssuedForm.findMany({
     where: baseAnd.length ? { AND: baseAnd } : {},
     select: {
       id: true,
       formNumber: true,
-      surname: true,
-      firstName: true,
-      middleName: true,
-      phoneNumber: true,
+      fullName: true,
+      phone: true,
       position: true,
       status: true,
-      verificationStatus: true,
       comment: true,
+      vettingNotes: true,
       electoralAreaId: true,
-      electoralArea: { select: { name: true, code: true } },
+      electoralArea: { select: { name: true, region: true } },
     },
-    orderBy: { createdAt: 'desc' },
-  })) as CandidateForNotice[];
+    orderBy: { issuedAt: 'desc' },
+  })) as FormForNotice[];
 
-  // Approved counts per slot → contest determination (approved only).
-  const approvedBySlot = new Map<string, number>();
-  for (const c of base) {
-    if (c.status !== 'APPROVED') continue;
-    const key = slotKey(c.electoralAreaId, c.position);
-    approvedBySlot.set(key, (approvedBySlot.get(key) ?? 0) + 1);
+  const rowsBase = base.map((f) => ({ ...f, status: normalizeEaFormStatus(f.status) }));
+
+  // Verified (approved) counts per slot → contest determination (approved only).
+  const verifiedBySlot = new Map<string, number>();
+  for (const f of rowsBase) {
+    if (f.status !== 'VERIFIED') continue;
+    const key = slotKey(f.electoralAreaId, f.position);
+    verifiedBySlot.set(key, (verifiedBySlot.get(key) ?? 0) + 1);
   }
 
   let contestedPositions = 0;
   let unopposedPositions = 0;
-  for (const count of Array.from(approvedBySlot.values())) {
+  for (const count of Array.from(verifiedBySlot.values())) {
     if (count > 1) contestedPositions += 1;
     else if (count === 1) unopposedPositions += 1;
   }
 
   const summary: NoticeOfPollSummary = {
-    totalApplicants: base.length,
-    totalApproved: base.filter((c) => c.status === 'APPROVED').length,
-    totalDisqualified: base.filter((c) => c.status === 'REJECTED').length,
+    totalApplicants: rowsBase.length,
+    totalApproved: rowsBase.filter((f) => f.status === 'VERIFIED').length,
+    totalDisqualified: rowsBase.filter((f) => f.status === 'REJECTED').length,
     contestedPositions,
     unopposedPositions,
-    didNotAppear: base.filter((c) => !DECIDED_STATUSES.has(c.status)).length,
+    didNotAppear: rowsBase.filter((f) => f.status !== 'VERIFIED' && f.status !== 'REJECTED').length,
   };
 
   const q = filters.q?.trim().toLowerCase();
 
-  const rows: NoticeOfPollRow[] = base
-    .map((c) => {
-      const approvedInSlot = approvedBySlot.get(slotKey(c.electoralAreaId, c.position)) ?? 0;
+  const rows: NoticeOfPollRow[] = rowsBase
+    .map((f) => {
+      const verifiedInSlot = verifiedBySlot.get(slotKey(f.electoralAreaId, f.position)) ?? 0;
       const contest: RowContestStatus =
-        c.status === 'APPROVED'
-          ? approvedInSlot > 1
-            ? 'CONTESTED'
-            : 'UNOPPOSED'
-          : 'NONE';
-      const canonical = canonicalizeDelegatePosition(c.position);
+        f.status === 'VERIFIED' ? (verifiedInSlot > 1 ? 'CONTESTED' : 'UNOPPOSED') : 'NONE';
       return {
-        id: c.id,
-        formNumber: c.formNumber,
-        applicantName: buildName(c),
-        phoneNumber: c.phoneNumber,
-        electoralAreaId: c.electoralAreaId,
-        electoralAreaName: c.electoralArea?.name ?? '—',
-        electoralAreaCode: c.electoralArea?.code ?? '',
-        position: c.position,
-        positionCanonical: canonical,
-        vettingStatus: c.verificationStatus,
-        approvalStatus: c.status,
+        id: f.id,
+        formNumber: f.formNumber,
+        applicantName: f.fullName,
+        phone: f.phone,
+        electoralAreaId: f.electoralAreaId,
+        electoralAreaName: f.electoralArea?.name ?? '—',
+        electoralAreaRegion: f.electoralArea?.region ?? '',
+        position: f.position,
+        status: f.status,
         contestStatus: contest,
-        disqualificationReason: c.status === 'REJECTED' ? c.comment ?? null : null,
-        finalEligibility: deriveFinalEligibility(c.status, contest),
+        disqualificationReason:
+          f.status === 'REJECTED' ? f.comment?.trim() || f.vettingNotes?.trim() || null : null,
+        finalEligibility: deriveFinalEligibility(f.status, contest),
       };
     })
     .filter((row) => {
-      if (filters.approvedOnly && row.approvalStatus !== 'APPROVED') return false;
-      if (filters.disqualifiedOnly && row.approvalStatus !== 'REJECTED') return false;
-      if (filters.status && row.approvalStatus !== filters.status) return false;
+      if (filters.approvedOnly && row.status !== 'VERIFIED') return false;
+      if (filters.disqualifiedOnly && row.status !== 'REJECTED') return false;
+      if (filters.status && row.status !== normalizeEaFormStatus(filters.status)) return false;
       if (filters.contestStatus) {
         if (filters.contestStatus === 'CONTESTED' && row.contestStatus !== 'CONTESTED') return false;
         if (filters.contestStatus === 'UNOPPOSED' && row.contestStatus !== 'UNOPPOSED') return false;
       }
       if (q) {
-        const hay = `${row.applicantName} ${row.formNumber} ${row.phoneNumber}`.toLowerCase();
+        const hay = `${row.applicantName} ${row.formNumber} ${row.phone}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -177,7 +154,7 @@ export async function buildNoticeOfPollData(
     .sort((a, b) => {
       const areaCmp = a.electoralAreaName.localeCompare(b.electoralAreaName);
       if (areaCmp !== 0) return areaCmp;
-      const posCmp = compareDelegatePositionCsvOrder(a.position, b.position);
+      const posCmp = a.position.localeCompare(b.position);
       if (posCmp !== 0) return posCmp;
       return a.applicantName.localeCompare(b.applicantName);
     });

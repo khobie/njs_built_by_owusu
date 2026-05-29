@@ -15,6 +15,7 @@ const nav: readonly NavItem[] = [
   { href: '/electoral-area/edit', label: 'Edit delegates' },
   { href: '/ea-portal/vetting', label: 'Vetting panel' },
   { href: '/ea-portal/contests', label: 'Contests' },
+  { href: '/ea-portal/notice-of-poll', label: 'Notice of Poll' },
   { href: '/ea-portal/reports', label: 'Reports' },
   { href: '/ea-portal/areas', label: 'Electoral areas' },
 ];

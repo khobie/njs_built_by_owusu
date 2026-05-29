@@ -116,7 +116,6 @@ export function AppShell({ activeHref, children }: { activeHref: string; childre
         { href: '/form-issuing', label: 'Form Issuing', icon: IconFilePlus },
         { href: '/edit-candidate', label: 'Edit candidate', icon: IconPencil },
         { href: '/vetting', label: 'Vetting', icon: IconClipboard },
-        { href: '/notice-of-poll', label: 'Notice of Poll', icon: IconDoc },
         { href: '/polling-stations', label: 'Electoral areas', icon: IconBuilding },
         { href: '/ea-portal', label: 'EA Portal', icon: IconGrid },
         { href: '/reports', label: 'Reports', icon: IconDoc },
@@ -132,12 +131,7 @@ export function AppShell({ activeHref, children }: { activeHref: string; childre
       ] as const;
     }
     if (role === 'VETTING_PANEL') {
-      return [
-        dash,
-        { href: '/notices', label: 'Notices', icon: IconDoc },
-        { href: '/vetting', label: 'Vetting', icon: IconClipboard },
-        { href: '/notice-of-poll', label: 'Notice of Poll', icon: IconDoc },
-      ] as const;
+      return [dash, { href: '/notices', label: 'Notices', icon: IconDoc }, { href: '/vetting', label: 'Vetting', icon: IconClipboard }] as const;
     }
     if (canAccessEaPortal(role)) {
       return [dash, { href: '/notices', label: 'Notices', icon: IconDoc }, { href: '/ea-portal', label: 'EA Portal', icon: IconGrid }] as const;

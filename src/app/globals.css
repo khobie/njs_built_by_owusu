@@ -2930,16 +2930,21 @@ tr.editing-row:hover {
 @media print {
   .app-sidebar,
   .app-topbar,
+  .ea-portal-sidebar,
+  .ea-portal-brand,
   .no-print {
     display: none !important;
   }
   .app-shell,
   .app-main,
+  .ea-portal-app,
+  .ea-portal-main,
   .container {
     margin: 0 !important;
     padding: 0 !important;
     max-width: none !important;
     width: 100% !important;
+    display: block !important;
   }
   .only-print { display: block; }
   .nop-print-title { text-align: center; margin-bottom: 1rem; }

@@ -1,6 +1,11 @@
 /**
  * Client-safe types and label helpers for the Notice of Poll portal.
- * No server-only imports (safe to use in client components).
+ * Operates on EA Portal form data (EaPortalIssuedForm). No server-only imports.
+ *
+ * EA status mapping for the notice:
+ *   VERIFIED  → approved / cleared to contest
+ *   REJECTED  → disqualified
+ *   other     → pending (did not complete vetting)
  */
 
 /** Comment auto-stamped on applicants who never appeared for vetting. */
@@ -9,9 +14,9 @@ export const NON_ATTENDEE_REASON = 'Did not appear for vetting.';
 export type NoticeOfPollFilters = {
   areaIds?: string[];
   position?: string;
-  /** CONTESTED | UNOPPOSED (applies to approved applicants only) */
+  /** CONTESTED | UNOPPOSED (applies to verified/approved applicants only) */
   contestStatus?: string;
-  /** Exact Candidate.status match */
+  /** Exact EaPortalIssuedForm.status match */
   status?: string;
   approvedOnly?: boolean;
   disqualifiedOnly?: boolean;
@@ -31,16 +36,13 @@ export type NoticeOfPollRow = {
   id: string;
   formNumber: string;
   applicantName: string;
-  phoneNumber: string;
+  phone: string;
   electoralAreaId: string;
   electoralAreaName: string;
-  electoralAreaCode: string;
+  electoralAreaRegion: string;
   position: string;
-  positionCanonical: string | null;
-  /** VERIFIED | NOT_VERIFIED */
-  vettingStatus: string;
-  /** Candidate.status (APPROVED / REJECTED / ISSUED / …) */
-  approvalStatus: string;
+  /** Raw EA form status (VERIFIED / REJECTED / ISSUED / RETURNED / PENDING_VETTING) */
+  status: string;
   contestStatus: RowContestStatus;
   disqualificationReason: string | null;
   finalEligibility: FinalEligibility;
@@ -83,12 +85,19 @@ export function rowContestStatusLabel(value: RowContestStatus): string {
   return '—';
 }
 
+/** High-level approval label derived from the EA form status. */
+export function approvalLabel(status: string): string {
+  if (status === 'VERIFIED') return 'Approved';
+  if (status === 'REJECTED') return 'Disqualified';
+  return 'Pending';
+}
+
 export function deriveFinalEligibility(
   status: string,
   contest: RowContestStatus
 ): FinalEligibility {
   if (status === 'REJECTED') return 'DISQUALIFIED';
-  if (status === 'APPROVED') {
+  if (status === 'VERIFIED') {
     if (contest === 'CONTESTED') return 'ON_BALLOT';
     if (contest === 'UNOPPOSED') return 'ELECTED_UNOPPOSED';
     return 'CLEARED';
